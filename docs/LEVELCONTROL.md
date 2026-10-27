@@ -63,6 +63,15 @@ Nach kurzem Tastendruck an beiden Sensoren erschienen sie in der Bluetooth-Histo
 - **Links:** erste Messung 19:24 erfolgreich: Batterie 100 %, Temperatur 22 °C, aber Füllstand 0 %, Gasmenge 0,0 kg, Messqualität 0 → Entschlüsselung stimmt, Messung selbst ohne akustische Kopplung (prüfen: sitzt der Sensor unter der Flasche?).
 - **Rechts:** über 20 Verbindungsversuche fehlgeschlagen, auch direkt nach erneutem Tastendruck (19:48). Mit Debug-Logging (`logger.set_level` für `custom_components.truma_levelcontrol`, `bleak_esphome`, `bleak_retry_connector`): erst „Timeout waiting for connect response after 20 s", später sofort `ESP_GATT_ERROR` (Code 133) beim Verbindungsaufbau, bei RSSI −63 bis −71 dB. Der Sensor wird gesehen, nimmt aber keine Verbindung an. Verdacht: belegt durch eine andere Zentrale (Handy mit Truma-App) oder Verbindung nur in einem bestimmten Zustand möglich. Links funktioniert mit identischem Weg, der Proxy ist also nicht die Ursache.
 
+### Stand 27.10.2026, 19:59 – beide Sensoren lesbar
+
+- **Rechts gelöst durch Werksreset** (Taste 20 s, danach kurz drücken): Verbindung danach beim ersten Versuch (Aufbau 13 s), Messung gelesen (Batterie 100 %, 23 °C). Der Sensor hatte offenbar einen festhängenden Verbindungszustand aus der iNet-Box-Zeit; ohne Reset lehnte er jeden Aufbau mit GATT-Fehler 133 ab. Für HA ist nach dem Reset keine neue Kopplung nötig.
+- Links brauchte keinen Reset. Beide lagen beim Test auf dem Schreibtisch, Füllstand/Qualität 0 ist dort erwartbar; eine Messung lieferte zwischendurch 44 % mit Qualität 3 (vermutlich gespeicherter Altwert). Erst unter der Flasche bewerten; falls Werte schwanken, `MEASURE_WAIT_S` (3 s) in `const.py` erhöhen.
+- Die Truma-App zeigt ohne iNet Box keine Füllstände; die Sensoren sprechen nur mit der Box bzw. jetzt mit HA.
+- Debug-Logging wieder auf Standard gesetzt. Pollintervall Standard 600 s, pro Gerät unter „Konfigurieren" änderbar.
+
+GATT-Profil des LevelControl (aus dem Service-Discovery, nützlich für eine spätere ESPHome-Eigenimplementierung): Dienste `22bfa601-…` (Characteristics `a610` Messung r, `a611`–`a617` r/w, `a619` Passwort r, `a61a` r/w), `22bfa6f0-…` (`a6f1` r), `22bfa701-…` (`a710`–`a715`), Device Information 0x180A, Battery 0x180F, sowie `f000ffd0-0451-…` (TI OAD-Firmware-Update → TI-CC26xx-Chip).
+
 ### Schritte
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
