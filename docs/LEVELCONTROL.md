@@ -72,6 +72,10 @@ Nach kurzem Tastendruck an beiden Sensoren erschienen sie in der Bluetooth-Histo
 
 GATT-Profil des LevelControl (aus dem Service-Discovery, nützlich für eine spätere ESPHome-Eigenimplementierung): Dienste `22bfa601-…` (Characteristics `a610` Messung r, `a611`–`a617` r/w, `a619` Passwort r, `a61a` r/w), `22bfa6f0-…` (`a6f1` r), `22bfa701-…` (`a710`–`a715`), Device Information 0x180A, Battery 0x180F, sowie `f000ffd0-0451-…` (TI OAD-Firmware-Update → TI-CC26xx-Chip).
 
+### Flaschentyp und -größe
+
+In HA gibt es keine Einstellung dafür: Der Sensor liefert Prozent und Gramm fertig berechnet, der Flaschentyp wurde von der Truma-App über die iNet Box in den Sensor geschrieben (beschreibbare Characteristics `22bfa611`–`a617`/`a61a`, Kodierung unbekannt). **Offen:** ob der Werksreset am rechten Sensor diese Konfiguration gelöscht hat (der Name blieb erhalten). Prüfung: beide Sensoren nacheinander unter dieselbe Flasche, Messung auslösen, Werte vergleichen. Bei Abweichung entweder über die iNet Box (nur 12 V, ohne TIN-Bus, App-Verbindung) neu konfigurieren oder die Characteristic per Vergleich links/rechts selbst ermitteln.
+
 ### Schritte
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
