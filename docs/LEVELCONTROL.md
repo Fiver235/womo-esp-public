@@ -121,6 +121,10 @@ Befehl: python tools/levelcontrol_dump.py <MAC> --proxy 192.168.100.208 --write-
 
 **Messverhalten auf der Tischplatte (22:15):** links misst mit Koppelkissen nach unten 44 % / Qualität 3 (Echo aus der Tischplatte), mit Kissen nach oben 0 % / Qualität 0 → echte Messung. Rechts liefert in derselben Lage 0 % / Qualität 0. Da die lesbare Konfiguration identisch ist, bleiben als Ursachen: Koppelkissen/Auflage (Kissen muss sauber und plan aufliegen), Firmware-Unterschied (1.0.7 vs 1.1.1) oder ein nicht lesbarer Parameter (`a714`). Test: beide Sensoren an exakt derselben Stelle vergleichen.
 
+**Advertisement (22:30):** Das 10-Byte-Herstellerfeld ist komplett variabel: links `01 08 …` (19:21) → `00 49 …` (22:27), rechts `01 21 …` → `00 76 …`/`00 77 …`. Die vermeintliche Hersteller-ID ist also ein Zähler plus 8 Byte vermutlich verschlüsselter Nutzdaten (Messwert?). Die Integration erkennt deshalb nur Sensoren, deren Zähler zufällig auf 0x5000 steht; Discovery müsste über den Namen `T?…` oder die Service-UUID 0x0A00 laufen. Entschlüsselung des Adv-Payloads (für passives Lesen ohne Verbindung) ist offen.
+
+**Vergleich unter derselben Flasche (22:25):** links 90 % / 9,9 kg / Qualität 3, rechts 0 % / Qualität 0 trotz identischer lesbarer Konfiguration. Offene Erklärungen: Firmware 1.0.7 (rechts) interpretiert die kopierten Tabellen anders; nur schreibbares `a714` enthält einen beim App-Setup gesetzten Parameter; Konfiguration wird erst nach Neustart des Sensors (Batterien raus) aus dem Flash übernommen. Nächster Test: Batterien rechts kurz entnehmen, Taste drücken, unter der Flasche messen.
+
 **Der Werksreset hat die Flaschenkonfiguration (a613–a616, a61a) und den Namen gelöscht.** Die Tabellen sind die vom Flaschentyp abhängige Kalibrierung, die die App über die iNet Box geschrieben hat. Wiederherstellung rechts: entweder die Werte vom linken Sensor kopieren (nur bei gleichem Flaschentyp!) oder Tabellen für den gewünschten Typ ermitteln.
 
 ### Schritte
