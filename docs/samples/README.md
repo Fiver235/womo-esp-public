@@ -5,6 +5,7 @@
 | `b1-2026-10-27-app-aktionen.log` | eigener Mitschnitt 27.10.2026 | **Track B1:** Observer am TIN-Bus mit echter iNet Box, Alde Compact 3020 HE + Aventa; 7 App-Aktionen + Panel-Kontrollgruppe, Marker eingefügt. Auswertung in `…auswertung.txt`. Enthält die echten 0x50-Befehle (siehe `docs/TRACK-B-INET-BUS.md` Abschnitt 6) |
 | `b1-2026-10-27-nachtmodus-licht.log` | eigener Mitschnitt 27.10.2026 | Zusatz: App-Nachtmodus ein/aus (Befehl 0x54) und Aventa-Beleuchtung am Panel (Status 0x51 Byte 10) |
 | `b2-2026-10-27-erster-test.log` | eigener Mitschnitt 27.10.2026 | **Track B2:** ESP als iNet Box (echte Box abgezogen), 13 Befehle 0x50 mit Panel-ACKs OKAY, Soll/Heizung/Warmwasser/Elektro/Gas (siehe `docs/TRACK-B-INET-BUS.md` Abschnitt 7) |
+| `b2-2026-10-27-aventa.log` | eigener Mitschnitt 27.10.2026 | **Track B2:** Aventa am Bus; Klimaautomatik ein/aus und Beleuchtung ein/aus per 0x50, Licht im Status bestätigt |
 | `fabian-alde.txt`, `fabian-alde2.txt` | `examples/alde.txt`, `alde2.txt` aus [Fabian-Schmidt/esphome-truma_inetbox@alde](https://github.com/Fabian-Schmidt/esphome-truma_inetbox/tree/alde/examples) (MIT) | ESPHome-Logs eines emulierten iNet-Box-Knotens an einem Alde-Panel 3020-113 / Compact 3020 HE (2024), mit handschriftlichen Aktions-Markern |
 
 Testlauf des Parsers:

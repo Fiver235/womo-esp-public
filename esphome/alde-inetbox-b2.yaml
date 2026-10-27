@@ -8,7 +8,7 @@
 # aus dem Mitschnitt vom 27.10.2026, siehe docs/TRACK-B-INET-BUS.md Abschn. 6):
 #   * Befehl 0x50 (16 Byte, L 0x1A, Laenge 0x25), Byte 15 = letzter 0x51-Zaehler
 #   * Heizung / Soll / Warmwasser / Elektro / Gas / Prioritaet / Klimaautomatik
-#   * Nachtmodus 0x54 (EXPERIMENT), Aventa-Licht via 0x50 Byte 10 (HYPOTHESE)
+#   * Aventa-Beleuchtung via 0x50 Byte 10 (bestaetigt), Nachtmodus 0x54 (EXPERIMENT, Panel lehnt "ein" ab)
 #
 # Gleiche Hardware und IP wie der Observer (alde-inetbus-observer.yaml), diese
 # Firmware ERSETZT den Observer auf dem ESP32. Log erst per USB, dann per WLAN:
@@ -182,7 +182,7 @@ switch:
     turn_off_action:
       - lambda: id(truma).get_alde_satus()->action_aircon_auto(false);
   - platform: template
-    name: "Aventa Beleuchtung (Hypothese)"
+    name: "Aventa Beleuchtung"
     icon: mdi:lightbulb
     lambda: |-
       auto s = id(truma).get_alde_satus();

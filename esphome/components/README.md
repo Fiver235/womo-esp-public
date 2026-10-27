@@ -33,7 +33,7 @@ Grundlage: `docs/TRACK-B-INET-BUS.md` Abschnitt 6.
 | Datei | Änderung |
 |---|---|
 | `TrumaStructsAlde.h` | `unknown_01` → `aircon_auto` (Klimaautomatik, Bit 0x02), `unknown_10` → `aventa_light` (Bit 0x02, nur Status); Kommentare mit Messwerten |
-| `TrumaiNetBoxAppAldeStatus.cpp` | `create_update_data`: 5. Byte `0x1A` statt `len+6`, Gesamtlänge `0x25`; `update_prepare`: `message_counter` = letzter 0x51-Zähler (ohne `+1`), `unknown_04 = 0xFFFF`, Flag-Bytes ohne Bit 0; neue Aktionen `action_heater_mode`, `action_water_mode`, `action_el_mode`, `action_gas_mode`, `action_heater_prio`, `action_aircon_auto`, `action_aventa_light` (Hypothese), `action_heater_room(float)` |
+| `TrumaiNetBoxAppAldeStatus.cpp` | `create_update_data`: 5. Byte `0x1A` statt `len+6`, Gesamtlänge `0x25`; `update_prepare`: `message_counter` = letzter 0x51-Zähler (ohne `+1`), `unknown_04 = 0xFFFF`, Flag-Bytes ohne Bit 0; neue Aktionen `action_heater_mode`, `action_water_mode`, `action_el_mode`, `action_gas_mode`, `action_heater_prio`, `action_aircon_auto`, `action_aventa_light` (bestätigt 27.10.2026), `action_heater_room(float)` |
 | `TrumaiNetBoxAppAldeNight.h/.cpp` (neu) | Nachtmodus: Status 0x55 speichern, Befehl 0x54 senden (`action_night_mode`, `action_night_temp`). Experiment, siehe Doku (ACK 0x02 bei „ein") |
 | `TrumaiNetBoxApp.h/.cpp` | `alde_night_` registriert (Parent, update, reset, Sendepfad, 0x55-Handler, `has_update_to_submit_`) |
 

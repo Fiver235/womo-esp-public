@@ -36,7 +36,7 @@ struct StatusFrameAldeDevice {  // NOLINT(altera-struct-pack-align)
 // docs/TRACK-B-INET-BUS.md Abschnitt 6).
 struct StatusFrameAldeStatus {  // NOLINT(altera-struct-pack-align)
   HeaterAlde heater_mode;
-  // Bit 0 im Status immer gesetzt, Bit 1 (0x02) = Klimaautomatik (Aventa) ein -> 0x01 / 0x03.
+  // Bit 0 = Aventa am Bus (ohne Aventa 0x02 gesehen), Bit 1 (0x02) = Klimaautomatik ein -> 0x01 / 0x03.
   uint8_t aircon_auto;
   TargetTemp target_temp_room;
   uint16_t unknown_04;  // xFFFE
@@ -44,7 +44,7 @@ struct StatusFrameAldeStatus {  // NOLINT(altera-struct-pack-align)
   ElectricPowerLevelAlde el_mode;
   GasModeAlde gas_mode;
   HeaterPriorityAlde heater_prio;
-  // Bit 0 im Status immer gesetzt, Bit 1 (0x02) = Aventa-Beleuchtung ein (nur am Panel schaltbar) -> 0x01 / 0x03.
+  // Bit 0 bisher immer gesetzt, Bit 1 (0x02) = Aventa-Beleuchtung ein -> 0x01 / 0x03. Per 0x50 schaltbar (B2 27.10.2026).
   uint8_t aventa_light;
   uint8_t unknown_11;  // x64
   uint8_t unknown_12;  // xFF
@@ -72,7 +72,7 @@ struct StatusFrameAldeStatusResponse {  // NOLINT(altera-struct-pack-align)
   ElectricPowerLevelAlde el_mode;
   GasModeAlde gas_mode;
   HeaterPriorityAlde heater_prio;
-  uint8_t aventa_light;  // gemessen immer 0x00; HYPOTHESE: 0x02 schaltet die Aventa-Beleuchtung (ungetestet)
+  uint8_t aventa_light;  // 0x02 schaltet die Aventa-Beleuchtung ein, 0x00 aus (bestaetigt 27.10.2026, die App nutzt das nicht)
   uint8_t unknown_11;  // x64
   uint8_t unknown_12;  // xFF
   uint8_t unknown_13;  // xFF

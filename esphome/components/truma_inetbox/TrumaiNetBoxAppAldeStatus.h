@@ -31,7 +31,7 @@ class TrumaiNetBoxAppAldeStatus : public TrumaStausFrameResponseStorage<StatusFr
   bool action_heater_prio(HeaterPriorityAlde prio);
   // Klimaautomatik (Aventa) ein/aus (Byte 1, 0x02).
   bool action_aircon_auto(bool on);
-  // EXPERIMENT: Aventa-Beleuchtung (Byte 10, 0x02). Nur im Status beobachtet, als Befehl ungetestet.
+  // Aventa-Beleuchtung ein/aus (Byte 10, 0x02). Bestaetigt 27.10.2026; die Truma-App bietet das nicht an.
   bool action_aventa_light(bool on);
 };
 

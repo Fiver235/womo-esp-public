@@ -165,7 +165,6 @@ bool TrumaiNetBoxAppAldeStatus::action_aventa_light(bool on) {
     ESP_LOGW(TAG, "Cannot update Alde (no status received yet).");
     return false;
   }
-  ESP_LOGW(TAG, "EXPERIMENT: Aventa light via 0x50 byte 10 - untested hypothesis.");
   auto heater = this->update_prepare();
   heater->aventa_light = on ? ALDE_FLAG_BIT : 0x00;
   this->update_submit();
