@@ -74,7 +74,7 @@ GATT-Profil des LevelControl (aus dem Service-Discovery, nützlich für eine sp�
 
 ### Flaschentyp und -größe
 
-In HA gibt es keine Einstellung dafür: Der Sensor liefert Prozent und Gramm fertig berechnet, der Flaschentyp wurde von der Truma-App über die iNet Box in den Sensor geschrieben (beschreibbare Characteristics `22bfa611`–`a617`/`a61a`, Kodierung unbekannt). **Offen:** ob der Werksreset am rechten Sensor diese Konfiguration gelöscht hat (der Name blieb erhalten). Prüfung: beide Sensoren nacheinander unter dieselbe Flasche, Messung auslösen, Werte vergleichen. Bei Abweichung entweder über die iNet Box (nur 12 V, ohne TIN-Bus, App-Verbindung) neu konfigurieren oder die Characteristic per Vergleich links/rechts selbst ermitteln.
+In HA gibt es keine Einstellung dafür: Der Sensor liefert Prozent und Gramm fertig berechnet, der Flaschentyp wurde von der Truma-App über die iNet Box in den Sensor geschrieben (beschreibbare Characteristics `22bfa611`–`a617`/`a61a`, Kodierung unbekannt). **Geklärt (siehe Reverse Engineering unten):** der Werksreset löscht Name und Flaschenkonfiguration; beides wurde rechts wiederhergestellt. Prüfung: beide Sensoren nacheinander unter dieselbe Flasche, Messung auslösen, Werte vergleichen. Bei Abweichung entweder über die iNet Box (nur 12 V, ohne TIN-Bus, App-Verbindung) neu konfigurieren oder die Characteristic per Vergleich links/rechts selbst ermitteln.
 
 ### Reverse Engineering der Sensorkonfiguration (27.10.2026, 20:15)
 
@@ -103,6 +103,19 @@ Werkzeug: `tools/levelcontrol_dump.py` (liest alle Characteristics über den Pro
 | `a711` | 4 | `20 bf 02 00` | gleich | Klartext |
 
 **Schreiben (bestätigt 20:25 am rechten Sensor):** Klartext-Writes auf `a612` quittiert der Sensor mit GATT-Fehler 0x80 (Application error). Akzeptiert wird der Wert **RC4-verschlüsselt mit frischem Keystream** (eigener Strom für Writes, beginnt pro Verbindung bei 0; Lesezugriffe vorher zählen nicht mit – zumindest wenn nur das Passwort gelesen wurde). Die Änderung ist erst nach **Kommando `0x01` auf `a617`** (Klartext) dauerhaft; ohne das Kommando stand beim Zurücklesen der alte Wert. `a617` ist also ein Kommandoregister: 0x01 = Konfiguration speichern (Store NV), 0x03/0x02 = Messung anstoßen (so nutzt es die HA-Integration). Beispiel: `python tools/levelcontrol_dump.py 00:81:F9:6F:B2:DE --proxy 192.168.100.208 --write a612:7265636874732d31316b6700 --write "!a617:01" --write-encrypt`. Nebeneffekt: `a610` zeigte danach Qualität 3 und 5 % – das Kommando löst offenbar auch eine Messung aus.
+
+**Wiederherstellung rechts (27.10.2026, 20:40, erledigt):** Beide Flaschen sind 11-kg-Stahl, daher Konfiguration 1:1 von links kopiert (fünf verschlüsselte Writes in einer Verbindung – der Write-Keystream läuft über die Writes fort – plus `!a617:01`), danach rechts zurückgelesen: identisch. Der Sensor prüft die Länge (zu kurze Tabelle → GATT-Fehler 7 „Invalid offset"). Verbindungen brechen gelegentlich auf Funkebene ab (Fehler 8); dann einfach wiederholen, ohne Speicherkommando wird nichts übernommen.
+
+Referenzwerte **Truma LevelControl, 11-kg-Stahlflasche** (zum Wiederherstellen nach einem Reset):
+
+```
+a613: 04 6e 00 1c 00 00
+a614: 23 00 2f 00 3b 00 47 00 53 00 9a 00 c1 00 e9 00 10 01 86 01
+a615: 4f 00 87 00 ca 00 13 01 61 01 43 03 4e 04 59 05 64 06 7f 09
+a616: cf bb a7 91 7b 64 4c 34 1a 00
+a61a: 83 72 61 52 43 35 28 1c 10 05
+Befehl: python tools/levelcontrol_dump.py <MAC> --proxy 192.168.100.208 --write-encrypt   --write a613:046e001c0000 --write a614:23002f003b00470053009a00c100e90010018601   --write a615:4f008700ca001301610143034e04590564067f09 --write a616:cfbba7917b644c341a00   --write a61a:837261524335281c1005 --write "!a617:01"
+```
 
 **Der Werksreset hat die Flaschenkonfiguration (a613–a616, a61a) und den Namen gelöscht.** Die Tabellen sind die vom Flaschentyp abhängige Kalibrierung, die die App über die iNet Box geschrieben hat. Wiederherstellung rechts: entweder die Werte vom linken Sensor kopieren (nur bei gleichem Flaschentyp!) oder Tabellen für den gewünschten Typ ermitteln.
 
