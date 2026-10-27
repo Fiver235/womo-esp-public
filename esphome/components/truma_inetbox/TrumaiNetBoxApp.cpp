@@ -198,8 +198,10 @@ void TrumaiNetBoxApp::lin_message_slave_observed_non_queue_(const uint8_t pid, c
       std::memcpy(&this->heater_alde_pid_1B_, message, sizeof(Heater_Alde_PID_1B));
     } else if (pid == 0x17 && length >= sizeof(Heater_Alde_PID_17)) {
       std::memcpy(&this->heater_alde_pid_17_, message, sizeof(Heater_Alde_PID_17));
+      this->heater_alde_last_aventa_ms_ = millis();
     } else if (pid == 0x08 && length >= sizeof(Heater_Alde_PID_08)) {
       std::memcpy(&this->heater_alde_pid_08_, message, sizeof(Heater_Alde_PID_08));
+      this->heater_alde_last_aventa_ms_ = millis();
     }
 }
 

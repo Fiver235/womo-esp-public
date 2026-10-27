@@ -116,8 +116,25 @@ binary_sensor:
     name: "Aventa Kompressor"
     device_class: running
     lambda: |-
-      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      if (id(truma).get_alde_aventa_frame_age_ms() > 30000) return {};
       return id(truma).get_alde_pid_17().compressor != 0;
+  - platform: template
+    name: "Aventa erreichbar"
+    device_class: connectivity
+    lambda: |-
+      // Aventa antwortet nur mit 230 V (Landstrom ODER Victron-Wechselrichter).
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      return id(truma).get_alde_aventa_frame_age_ms() < 30000;
+  - platform: template
+    name: "Landstrom vorhanden"
+    device_class: plug
+    lambda: |-
+      // Netzstrom der Alde (Frame 0x1B): 0x7FFF = kein Landstrom (gemessen 27.10.2026).
+      // Die Elektroheizung haengt nur am Landstrom, nicht am Wechselrichter.
+      // Wert bei vorhandenem Landstrom noch nicht beobachtet -> beim ersten Landstrom pruefen.
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      uint16_t v = id(truma).get_alde_pid_1B().mains_current;
+      return v != 0x7FFF && v != 0xFFFF;
   - platform: wireguard
     status:
       name: "WireGuard verbunden"
@@ -235,7 +252,7 @@ sensor:
     accuracy_decimals: 0
     update_interval: 10s
     lambda: |-
-      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      if (id(truma).get_alde_aventa_frame_age_ms() > 30000) return {};
       return (float) id(truma).get_alde_pid_17().light_level;
   - platform: template
     name: "Aventa Sensortemperatur"
@@ -245,7 +262,7 @@ sensor:
     accuracy_decimals: 1
     update_interval: 10s
     lambda: |-
-      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      if (id(truma).get_alde_aventa_frame_age_ms() > 30000) return {};
       uint16_t v = (uint16_t) id(truma).get_alde_pid_17().temp_sensor;
       if (v == 0xFFFF || v == 0x7FFF || v == 0) return {};
       return v / 10.0f - 273.0f;

@@ -60,6 +60,11 @@ class TrumaiNetBoxApp : public LinBusProtocol {
   uint32_t get_alde_heater_frame_age_ms() const {
     return this->heater_alde_last_frame_ms_ == 0 ? UINT32_MAX : (uint32_t) (millis() - this->heater_alde_last_frame_ms_);
   }
+  // Millisekunden seit dem letzten Aventa-Frame (PID 0x17/0x08). Die Aventa antwortet nur mit 230 V
+  // (Landstrom oder Wechselrichter); ohne sie bleibt der Slot leer.
+  uint32_t get_alde_aventa_frame_age_ms() const {
+    return this->heater_alde_last_aventa_ms_ == 0 ? UINT32_MAX : (uint32_t) (millis() - this->heater_alde_last_aventa_ms_);
+  }
 
   void debug(uint16_t val) {
     this->DEBUG_VALUE = val;
@@ -111,6 +116,7 @@ class TrumaiNetBoxApp : public LinBusProtocol {
   Heater_Alde_PID_17 heater_alde_pid_17_ = {};
   Heater_Alde_PID_08 heater_alde_pid_08_ = {};
   volatile uint32_t heater_alde_last_frame_ms_ = 0;
+  volatile uint32_t heater_alde_last_aventa_ms_ = 0;
 
   // last time CP plus was informed I got an update msg.
   uint32_t update_time_ = 0;
