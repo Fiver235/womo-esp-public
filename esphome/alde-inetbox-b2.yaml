@@ -133,6 +133,9 @@ sensor:
   - platform: wireguard
     latest_handshake:
       name: "WireGuard letzter Handshake"
+  - platform: wifi_signal
+    name: "WLAN-Signal"
+    update_interval: 60s
 
   # ---- Heizungs-Frames (passiv, Sekundentakt am Bus) ----
   - platform: template
@@ -426,7 +429,14 @@ select:
           id(truma).get_alde_satus()->action_heater_prio(
               x == "Elektro" ? truma_inetbox::HeaterPriorityAlde::HEATER_PRIORITY_ALDE_ELECTRIC
                              : truma_inetbox::HeaterPriorityAlde::HEATER_PRIORITY_ALDE_GAS);
+button:
+  - platform: restart
+    name: "Neustart"
+
 text_sensor:
+  - platform: wireguard
+    address:
+      name: "WireGuard-Adresse"
   - platform: template
     name: "Alde Energiequelle aktiv"
     icon: mdi:fire-circle
