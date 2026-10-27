@@ -31,6 +31,10 @@ Home Assistant baut die Verbindung zu ESPHome-Geräten selbst auf; hinter dem Ni
 
 **Wichtig:** Ein WireGuard-Peer (Schlüsselpaar) kann nur von einem Gerät benutzt werden. Der Alde-ESP hat 192.168.100.202, der Proxy 192.168.100.208.
 
+### Stand 27.10.2026, 18:46
+
+Proxy geflasht (COM9), WLAN 192.168.1.241, SNTP synchron, WireGuard-Handshake 18:46:16, Peer online. Vom Heimnetz aus ist Port 6053 auf 192.168.100.208 erreichbar (Ping antwortet der ESP durch den Tunnel nicht, das ist normal). In HA ist bisher nur der Alde-ESP eingetragen, HACS vorhanden, LevelControl-Repository noch nicht hinzugefügt.
+
 ### Schritte
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
