@@ -24,7 +24,7 @@ Home Assistant baut die Verbindung zu ESPHome-Geräten selbst auf; hinter dem Ni
 |---|---|
 | Config | `esphome/womo-ble-proxy.yaml` |
 | Hardware | ESP32-WROOM-32 DevKit, 5 V per USB oder MP1584 aus 12 V, Platz nahe am Gaskasten |
-| WLAN | Womo-WLAN (DHCP) |
+| WLAN | Womo-WLAN, feste IP 192.168.1.241 (Alde-ESP: .240) |
 | WireGuard | eigener Peer in der Fritzbox (Internet → Freigaben → VPN (WireGuard) → Einzelgerät), Tunnel-Adresse 192.168.100.208, Keepalive 25 s, nur 192.168.100.0/24 durch den Tunnel, `reboot_timeout: 0s` |
 | Schlüssel | `proxy_wg_*` und `proxy_api_encryption_key` in `esphome/secrets.yaml` (nicht in Git) |
 | BLE | `esp32_ble_tracker` + `bluetooth_proxy` mit `active: true` (GATT-Verbindungen nötig) |

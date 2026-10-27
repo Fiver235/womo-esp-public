@@ -7,7 +7,7 @@
 # - wireguard: eigener Peer in der Fritzbox (NICHT derselbe wie der Alde-ESP),
 #   Tunnel-Adresse 192.168.100.208. HA erreicht den ESP unter dieser Adresse
 #   (ESPHome-Integration -> manuell hinzufuegen, Port 6053, proxy_api_encryption_key).
-# - Platzierung: nahe am Gaskasten, im WLAN des Nighthawk M5 (DHCP).
+# - Platzierung: nahe am Gaskasten, im WLAN des Nighthawk M5, feste IP 192.168.1.241.
 #
 # Flashen (erstes Mal per USB, danach OTA):
 #   .\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx
@@ -44,6 +44,12 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   reboot_timeout: 0s
+  manual_ip:                # feste IP im Womo-WLAN (freigegeben 27.10.2026), Alde-ESP hat .240
+    static_ip: 192.168.1.241
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.1
+  use_address: 192.168.1.241   # fuer esphome logs/run vom Notebook im Womo-WLAN
   ap:
     ssid: "Womo-BLE-Proxy Fallback"
     password: !secret fallback_ap_password
