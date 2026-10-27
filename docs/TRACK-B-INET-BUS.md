@@ -357,7 +357,7 @@ Nebenbefund Re-Init: Der komplette Init-Pfad von Fabians Komponente (0x0A → 0x
 | 16:31:48 | **Beleuchtung ein (Byte 10 = 02)** | 04 OKAY | **16:31:54: Byte 10 = 03 ✓ – Licht an** |
 | 16:32:20 | Beleuchtung aus (Byte 10 = 00) | 05 OKAY | 16:33:5x: Byte 10 = 01 ✓ |
 
-**Die Aventa-Beleuchtung lässt sich über den iNet-Bus schalten**, obwohl die Truma-App das nicht anbietet (Byte 10, Bit 0x02 im 0x50). Hypothese bestätigt.
+**Die Aventa-Beleuchtung lässt sich über den iNet-Bus schalten**, obwohl die Truma-App das nicht anbietet (Byte 10, Bit 0x02 im 0x50). Hypothese bestätigt. Sichtprüfung: Licht ging an und wieder aus.
 
 Neue Deutung von Byte 1 im 0x51: Bit 0 = Aventa am Bus (ohne Aventa war Byte 1 = 0x02, mit Aventa 0x01/0x03), Bit 1 = Klimaautomatik. Byte 10 analog: Bit 1 = Beleuchtung, Bit 0 bisher immer gesetzt.
 
