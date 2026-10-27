@@ -39,7 +39,7 @@ Proxy geflasht (COM9), WLAN 192.168.1.241, SNTP synchron, WireGuard-Handshake 18
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
 2. Zu Hause in HA: Einstellungen → Geräte & Dienste → ESPHome → Gerät hinzufügen → Host `192.168.100.208`, Port 6053, Schlüssel `proxy_api_encryption_key`. Danach erscheint der ESP als Bluetooth-Proxy (Einstellungen → Bluetooth). Erledigt am 27.10.2026 („Womo BLE-Proxy").
-3. ~~HACS~~ **Manuell** installieren: HACS lehnt das Repository ab (alle Dateien im Wurzelverzeichnis, keine `hacs.json`). Stattdessen die Dateien per Samba-Share nach `\homeassistant\config\custom_components	ruma_levelcontrol\` kopieren (`*.py`, `manifest.json`, `strings.json`; `de.json`/`en.json` nach `translations\`), danach HA neu starten. Erledigt am 27.10.2026 (Version 2.0.0, Dateien vorher auf Netzwerk-/Shell-Aufrufe geprüft: keine).
+3. ~~HACS~~ **Manuell** installieren: HACS lehnt das Repository ab (alle Dateien im Wurzelverzeichnis, keine `hacs.json`). Stattdessen die Dateien per Samba-Share nach `\homeassistant\config\custom_components\truma_levelcontrol\` kopieren (`*.py`, `manifest.json`, `strings.json`; `de.json`/`en.json` nach `translations\`), danach HA neu starten. Erledigt am 27.10.2026 (Version 2.0.0, Dateien vorher auf Netzwerk-/Shell-Aufrufe geprüft: keine).
 4. Die Sensoren werden per Discovery gemeldet oder manuell über ihre Bluetooth-MAC hinzugefügt. Truma-App dabei geschlossen halten. Messintervall unter „Konfigurieren" setzen (z. B. 30 min; jede Messung kostet Batterie des Sensors).
 
 ### Zu beachten
