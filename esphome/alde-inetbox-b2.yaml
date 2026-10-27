@@ -1,0 +1,259 @@
+# ===========================================================================
+# Track B2 – iNet-Box-Emulation fuer das Alde-Panel (SENDET auf dem TIN-Bus)
+#
+# !!! Vor dem Flashen die echte Truma iNet Box vom TIN-Bus abziehen !!!
+# Beide melden sich als LIN-Slave NAD 0x03 – zwei Boxen am Bus stoeren sich.
+#
+# Basis: esphome/components/truma_inetbox (Fabian-Schmidt @alde + Patches
+# aus dem Mitschnitt vom 27.10.2026, siehe docs/TRACK-B-INET-BUS.md Abschn. 6):
+#   * Befehl 0x50 (16 Byte, L 0x1A, Laenge 0x25), Byte 15 = letzter 0x51-Zaehler
+#   * Heizung / Soll / Warmwasser / Elektro / Gas / Prioritaet / Klimaautomatik
+#   * Nachtmodus 0x54 (EXPERIMENT), Aventa-Licht via 0x50 Byte 10 (HYPOTHESE)
+#
+# Gleiche Hardware und IP wie der Observer (alde-inetbus-observer.yaml), diese
+# Firmware ERSETZT den Observer auf dem ESP32. Log erst per USB, dann per WLAN:
+#   .\.venv\Scripts\esphome.exe run esphome\alde-inetbox-b2.yaml --device COM9
+#   .\.venv\Scripts\esphome.exe logs esphome\alde-inetbox-b2.yaml
+# ===========================================================================
+
+substitutions:
+  name: alde-inetbox
+  friendly_name: "Alde iNet-Box"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: VERBOSE          # fuer den ersten Test; danach DEBUG
+  baud_rate: 500000
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret api_encryption_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: 192.168.1.240
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.1
+  use_address: 192.168.1.240
+  ap:
+    ssid: "Alde-iNetBox Fallback"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [ truma_inetbox, uart ]
+
+uart:
+  - id: lin_uart_bus
+    tx_pin: GPIO17
+    rx_pin: GPIO16
+    baud_rate: 9600
+    data_bits: 8
+    parity: NONE
+    stop_bits: 2
+
+truma_inetbox:
+  id: truma
+  uart_id: lin_uart_bus
+  observer_mode: false    # B2: antwortet als iNet Box (NAD 0x03) und sendet Befehle
+
+binary_sensor:
+  - platform: truma_inetbox
+    name: "Alde Panel verbunden"
+    type: CP_PLUS_CONNECTED
+
+# ---------------------------------------------------------------------------
+# Entitaeten ueber Template-Lambdas direkt auf die C++-Aktionen der Komponente.
+# Zustand kommt aus dem zuletzt empfangenen 0x51 (Status) bzw. 0x55 (Nacht).
+# ---------------------------------------------------------------------------
+
+sensor:
+  - platform: template
+    name: "Alde Innentemperatur"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    update_interval: 10s
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      uint16_t v = (uint16_t) s->get_status()->current_temp_inside;
+      if (v == 0xFFFF || v == 0xFFFE || v == 0) return {};
+      return v / 10.0f - 273.0f;
+  - platform: template
+    name: "Alde Aussentemperatur"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    accuracy_decimals: 1
+    update_interval: 10s
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      uint16_t v = (uint16_t) s->get_status()->current_temp_outside;
+      if (v == 0xFFFF || v == 0xFFFE || v == 0) return {};
+      return v / 10.0f - 273.0f;
+
+number:
+  - platform: template
+    name: "Alde Soll-Raumtemperatur"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    min_value: 5
+    max_value: 30
+    step: 0.5
+    update_interval: 5s
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      uint16_t v = (uint16_t) s->get_status()->target_temp_room;
+      if (v == 0xFFFF || v == 0) return {};
+      return v / 10.0f - 273.0f;
+    set_action:
+      - lambda: id(truma).get_alde_satus()->action_heater_room((float) x);
+  - platform: template
+    name: "Alde Nacht-Solltemperatur (Experiment)"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    min_value: 5
+    max_value: 30
+    step: 0.5
+    update_interval: 5s
+    lambda: |-
+      auto s = id(truma).get_alde_night();
+      if (!s->get_status_valid()) return {};
+      uint16_t v = (uint16_t) s->get_status()->target_temp_room;
+      if (v == 0xFFFF || v == 0) return {};
+      return v / 10.0f - 273.0f;
+    set_action:
+      - lambda: id(truma).get_alde_night()->action_night_temp((float) x);
+
+switch:
+  - platform: template
+    name: "Alde Heizung"
+    icon: mdi:radiator
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      return s->get_status()->heater_mode == truma_inetbox::HeaterAlde::HEATER_ALDE_ON;
+    turn_on_action:
+      - lambda: id(truma).get_alde_satus()->action_heater_mode(true);
+    turn_off_action:
+      - lambda: id(truma).get_alde_satus()->action_heater_mode(false);
+  - platform: template
+    name: "Alde Gas"
+    icon: mdi:fire
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      return s->get_status()->gas_mode == truma_inetbox::GasModeAlde::GAS_MODE_ALDE_ON;
+    turn_on_action:
+      - lambda: id(truma).get_alde_satus()->action_gas_mode(true);
+    turn_off_action:
+      - lambda: id(truma).get_alde_satus()->action_gas_mode(false);
+  - platform: template
+    name: "Aventa Klimaautomatik"
+    icon: mdi:air-conditioner
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      return (s->get_status()->aircon_auto & 0x02) != 0;
+    turn_on_action:
+      - lambda: id(truma).get_alde_satus()->action_aircon_auto(true);
+    turn_off_action:
+      - lambda: id(truma).get_alde_satus()->action_aircon_auto(false);
+  - platform: template
+    name: "Aventa Beleuchtung (Hypothese)"
+    icon: mdi:lightbulb
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      return (s->get_status()->aventa_light & 0x02) != 0;
+    turn_on_action:
+      - lambda: id(truma).get_alde_satus()->action_aventa_light(true);
+    turn_off_action:
+      - lambda: id(truma).get_alde_satus()->action_aventa_light(false);
+  - platform: template
+    name: "Alde Nachtmodus (Experiment)"
+    icon: mdi:weather-night
+    optimistic: true      # Statusbit fuer "Nachtmodus aktiv" noch unbekannt
+    turn_on_action:
+      - lambda: id(truma).get_alde_night()->action_night_mode(true);
+    turn_off_action:
+      - lambda: id(truma).get_alde_night()->action_night_mode(false);
+
+select:
+  - platform: template
+    name: "Alde Warmwasser"
+    icon: mdi:water-boiler
+    options: ["Aus", "Normal", "Boost"]
+    update_interval: 5s
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      switch (s->get_status()->water_mode) {
+        case truma_inetbox::WaterTempAlde::WATER_TEMP_ALDE_NORMAL: return std::string("Normal");
+        case truma_inetbox::WaterTempAlde::WATER_TEMP_ALDE_BOOST: return std::string("Boost");
+        default: return std::string("Aus");
+      }
+    set_action:
+      - lambda: |-
+          auto m = truma_inetbox::WaterTempAlde::WATER_TEMP_ALDE_OFF;
+          if (x == "Normal") m = truma_inetbox::WaterTempAlde::WATER_TEMP_ALDE_NORMAL;
+          if (x == "Boost") m = truma_inetbox::WaterTempAlde::WATER_TEMP_ALDE_BOOST;
+          id(truma).get_alde_satus()->action_water_mode(m);
+  - platform: template
+    name: "Alde Elektro"
+    icon: mdi:flash
+    options: ["0 kW", "1 kW", "2 kW", "3 kW"]
+    update_interval: 5s
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      switch ((uint8_t) s->get_status()->el_mode) {
+        case 10: return std::string("1 kW");
+        case 20: return std::string("2 kW");
+        case 30: return std::string("3 kW");
+        default: return std::string("0 kW");
+      }
+    set_action:
+      - lambda: |-
+          auto m = truma_inetbox::ElectricPowerLevelAlde::ELECTRIC_POWER_LEVEL_ALDE_0;
+          if (x == "1 kW") m = truma_inetbox::ElectricPowerLevelAlde::ELECTRIC_POWER_LEVEL_ALDE_1000;
+          if (x == "2 kW") m = truma_inetbox::ElectricPowerLevelAlde::ELECTRIC_POWER_LEVEL_ALDE_2000;
+          if (x == "3 kW") m = truma_inetbox::ElectricPowerLevelAlde::ELECTRIC_POWER_LEVEL_ALDE_300;
+          id(truma).get_alde_satus()->action_el_mode(m);
+  - platform: template
+    name: "Alde Prioritaet"
+    icon: mdi:swap-vertical
+    options: ["Gas", "Elektro"]
+    update_interval: 5s
+    lambda: |-
+      auto s = id(truma).get_alde_satus();
+      if (!s->get_status_valid()) return {};
+      return s->get_status()->heater_prio == truma_inetbox::HeaterPriorityAlde::HEATER_PRIORITY_ALDE_ELECTRIC
+                 ? std::string("Elektro") : std::string("Gas");
+    set_action:
+      - lambda: |-
+          id(truma).get_alde_satus()->action_heater_prio(
+              x == "Elektro" ? truma_inetbox::HeaterPriorityAlde::HEATER_PRIORITY_ALDE_ELECTRIC
+                             : truma_inetbox::HeaterPriorityAlde::HEATER_PRIORITY_ALDE_GAS);

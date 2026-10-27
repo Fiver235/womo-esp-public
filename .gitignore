@@ -1,0 +1,5 @@
+esphome/secrets.yaml
+esphome/.esphome/
+.venv/
+logs/
+.claude/settings.local.json

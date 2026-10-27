@@ -1,0 +1,94 @@
+# ===========================================================================
+# Track B – Mitschnitt-Firmware fuer den TIN-Bus MIT echter iNet Box
+#
+# Nutzt Fabian Schmidts truma_inetbox-Komponente (Branch "alde") im
+# observer_mode: die Komponente dekodiert die LIN-Transportschicht
+# (BA/BB/FA, Multi-Frame-Reassembly) und loggt jede Nachricht als
+# "Multi package request/response ..." inkl. Alde-Struktur-Dekodierung
+# (0x0C Geraeteliste, 0x0D ACK, 0x51/0x53/0x55/0x57/0x15).
+#
+# observer_mode: true  -> SENDET NICHTS. iNet Box bleibt angeschlossen.
+#
+# Hardware wie alde-gateway.yaml, nur LIN-A (GPIO17/16).
+# Logs: per USB (500000 Baud) oder ueber die ESPHome-Logkonsole mitschneiden
+# und als Datei sichern. Messprotokoll: ../docs/TRACK-B-INET-BUS.md
+# ===========================================================================
+
+substitutions:
+  name: alde-inetbus-observer
+  friendly_name: "Alde iNet-Bus Observer"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: VERBOSE
+  baud_rate: 500000     # USB-Log fuer luckenlosen Mitschnitt
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret api_encryption_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Feste IP: der Nighthawk M5 kann keine DHCP-Reservierung. Adresse am
+  # oberen Ende des Subnetzes, DHCP-Bereich im M5 moeglichst auf .2-.199
+  # begrenzen (Einstellungen -> Erweitert -> LAN/DHCP).
+  manual_ip:
+    static_ip: 192.168.1.240
+    gateway: 192.168.1.1
+    subnet: 255.255.255.0
+    dns1: 192.168.1.1
+  use_address: 192.168.1.240   # esphome logs/run ohne --device und ohne mDNS
+  ap:
+    ssid: "Alde-Observer Fallback"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+# Lokale Kopie von Fabian-Schmidt/esphome-truma_inetbox@alde (Commit 40bcbc9,
+# 2024-04-06) in esphome/components/, angepasst an ESPHome 2026.x; ESP-IDF-
+# UART-Anbindung (uart-Komponente mit Event-Queue) aus havanti/esphome-truma.
+# Details: components/README.md. Basis fuer den Track-B-Fork.
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [ truma_inetbox, uart ]
+
+uart:
+  - id: lin_uart_bus
+    tx_pin: GPIO17
+    rx_pin: GPIO16
+    baud_rate: 9600
+    data_bits: 8
+    parity: NONE
+    stop_bits: 2
+
+truma_inetbox:
+  uart_id: lin_uart_bus
+  observer_mode: true    # Phase 1b: nur mithoeren.
+  # Phase 2b (Experiment, OHNE echte iNet Box am Bus!): observer_mode: false
+  # und unten die number-Entitaet einkommentieren -> sendet Typ 0x50.
+
+binary_sensor:
+  - platform: truma_inetbox
+    name: "Alde Panel alive"
+    type: CP_PLUS_CONNECTED
+
+# number:
+#   - platform: truma_inetbox
+#     name: "Alde Target Room Temperature (0x50 Experiment)"
+#     type: TARGET_ROOM_TEMPERATURE

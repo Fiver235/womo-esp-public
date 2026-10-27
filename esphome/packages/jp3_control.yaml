@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------------
+# JP3 "3rd Party Panel" (LIN-B). Hier ist der ESP32 LIN-MASTER und steuert
+# das Alde-Bedienteil wie ein Fremdbedienteil (CBE / Alde Smart Control).
+# Basis: holdestmade/esphome-alde-3020 (MIT). Control-Frame 0x1A, Info 0x1B,
+# 19200 Baud 8N1, Break per Baudraten-Wechsel (benoetigt framework esp-idf).
+#
+# Voraussetzung im Alde-Panel: Settings -> Installed Accessories ->
+# "Third Party Panel" aktivieren. Nur EIN Fremdgeraet an JP3.
+# ---------------------------------------------------------------------------
+
+external_components:
+  - source: github://holdestmade/esphome-alde-3020
+    components: [ alde3020 ]
+    refresh: 1d
+
+uart:
+  - id: jp3_uart
+    tx_pin: GPIO27
+    rx_pin: GPIO26
+    baud_rate: 19200
+    data_bits: 8
+    parity: NONE
+    stop_bits: 1
+
+alde3020:
+  id: alde
+  uart_id: jp3_uart
+
+climate:
+  - platform: alde3020
+    alde3020_id: alde
+    name: "Alde Zone 1"
+    zone: 1
+
+sensor:
+  - platform: alde3020
+    alde3020_id: alde
+    zone1_temperature:
+      name: "Alde Zone 1 Temperature"
+      id: alde_zone1_temp
+    outdoor_temperature:
+      name: "Alde Outdoor Temperature"
+      id: alde_outdoor_temp
+    zone1_target_temperature:
+      name: "Alde Zone 1 Target"
+    electric_power_kw:
+      name: "Alde Electric Power"
+      unit_of_measurement: "kW"
+
+switch:
+  - platform: alde3020
+    alde3020_id: alde
+    panel_on:
+      name: "Alde Panel"
+      id: alde_panel
+    gas_enable:
+      name: "Alde Gas Heating"
+      id: alde_gas_enable
+    ac_auto:
+      name: "Alde AC Auto Mode"
+      id: alde_ac_auto
+
+select:
+  - platform: alde3020
+    alde3020_id: alde
+    electric_power:
+      name: "Alde Electric Power Level"
+      id: alde_elec_power
+    water_mode:
+      name: "Alde Water Heating Mode"
+      id: alde_water_mode
+
+binary_sensor:
+  - platform: template
+    name: "Alde Pump Running"
+    lambda: 'return id(alde).get_pump_running();'
+  - platform: template
+    name: "Alde Error"
+    device_class: problem
+    lambda: 'return id(alde).get_error_present();'
+  - platform: template
+    name: "Alde Gas Valve Open"
+    lambda: 'return id(alde).get_gas_valve_open();'
+  - platform: template
+    name: "Alde AC Power Available"
+    device_class: power
+    lambda: 'return id(alde).get_ac_available();'

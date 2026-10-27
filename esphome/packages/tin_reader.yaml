@@ -1,0 +1,893 @@
+# ---------------------------------------------------------------------------
+# TIN-Bus-Mitleser (LIN-A). RECEIVE-ONLY: schreibt nie auf den Bus.
+# Basis: Mellowgroup-dk/alde-3020he-lin, esphome/alde-lin-reader.yaml (MIT).
+# Aenderungen gegenueber dem Original: uart-id tin_uart, Entitaeten mit
+# Praefix "TIN", Node-/WLAN-/API-Bloecke entfernt (stehen in alde-gateway.yaml).
+# ---------------------------------------------------------------------------
+
+
+# RECEIVE-ONLY. tx_pin is declared, but there is not one call in this file that
+# writes to the bus. The connection is passive listening, and the caravan's ONE
+# original Alde panel has to keep working.
+uart:
+  - id: tin_uart
+    tx_pin: GPIO17   # deklariert, wird nie beschrieben
+    rx_pin: GPIO16
+    baud_rate: 9600
+    parity: NONE
+    stop_bits: 2
+
+# ---------------------------------------------------------------------------
+# SEQUENCE RECORDER — the ORDER of the schedule, not just the rates
+#
+# The slot census counts how often each PID is seen. It says nothing about the
+# ORDER within a cycle, and the `SIG` line is `if (diff)` — only changes are
+# logged, so stable frames are silent.
+#
+# Purely receiving. Not one byte is written, and the node stays the neutral
+# reader. The buffer always fills; the buttons only control reset and dump.
+#
+# NOTE: timestamps are quantised to the parser's 100 ms tick. The ORDER is
+#   exact — frames are parsed in buffer order — but the distance between two
+#   slots inside the same tick cannot be resolved. Slot timing needs a
+#   tighter loop.
+globals:
+  - id: seq_arm
+    type: bool
+    initial_value: 'false'
+  - id: seq_dump_req
+    type: bool
+    initial_value: 'false'
+
+button:
+  - platform: template
+    name: "SEQUENCE reset and record"
+    id: seq_reset_btn
+    on_press:
+      - lambda: 'id(seq_arm) = true;'
+
+  - platform: template
+    name: "SEQUENCE dump"
+    id: seq_dump_btn
+    on_press:
+      - lambda: 'id(seq_dump_req) = true;'
+
+# Two encodings on the bus. See docs/PROTOCOL.md.
+#
+#   Temperature   16-bit little-endian decikelvin:  T(degC) = (raw - 2730) / 10
+#                 0xFFFF and 0x7FFF are sentinels for "not available" and are
+#                 NOT published — the sensor keeps its previous value.
+#
+#   Current/voltage  16-bit little-endian with BIT 15 SET as a type marker:
+#                 x = (raw & 0x7FFF) / 100
+#                 Here 0x7FFF must NOT be filtered as a sentinel — the masking
+#                 that produces the value removes exactly the bit the sentinel
+#                 is recognised by. This also explains the "oscillations of 10
+#                 units" seen throughout: they are 0.1 V and 0.1 A.
+#
+# The field layout is verified against the Alde panel's service menu: five
+# fields read off the panel and found again in raw bytes within the same
+# minute. The setpoint is verified by direct test (23.0 -> 17.5 showed up in
+# 0x03 offset 0-1 as 90 0B -> 59 0B).
+sensor:
+  # Setpoint, 0x03 offset 0-1. Verified by two direct tests: 23.0 -> 17.5 and
+  # -> 20.0, both followed by this field.
+  #
+  # WARNING — THE VALUE IS UNRELIABLE WHILE THE AIR CONDITIONER IS ACTIVE.
+  # 0x03 carries the setpoint only while the air conditioning unit is dormant.
+  # With the unit active the field carries either the target or a value that
+  # tracks room temperature. See "The three regimes for 0x03" in
+  # docs/PROTOCOL.md.
+  #
+  # The reading is DELIBERATELY not gated on that state. The gate would be
+  # cheap to write and expensive to be wrong about, and a condition you do not
+  # understand only moves the error. Do not build frost protection on it.
+  - platform: template
+    name: "TIN Setpoint"
+    id: alde_setpoint
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+  # Room temperature, 0x47 offset 0-1.
+  # CONFIRMED AGAINST THE PANEL: the panel showed a constant 24 degC as room
+  # temperature, and this field sat at 24 in 154 of 160 readings (range
+  # 23.8-24.6). First external confirmation of the room temperature.
+  - platform: template
+    name: "TIN Room Temperature"
+    id: alde_room_temp
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+  # Glycol temperature, 0x5B offset 0-1. The panel showed Glycol Temp 54.0 and
+  # 0x5B offset 0-1 was C6 0C = 3270 = 54.0 in the same minute.
+  - platform: template
+    name: "TIN Glycol Temperature"
+    id: alde_glycol
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+  # Water temperature, 0xD6 offset 4-5. The panel showed Water Temp 51.0 and
+  # the raw bytes were A8 0C = 3240 = 51.0.
+  - platform: template
+    name: "TIN Water Temperature"
+    id: alde_water_temp
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+  # PCB temperature, 0xD3 offset 0-1. This field was called "status" for a
+  # while on the assumption that a small changing byte had to be a state code.
+  # The panel settled it: PCB Temp 39.0 against raw 30 0C = 3120.
+  - platform: template
+    name: "TIN PCB Temperature"
+    id: alde_pcb_temp
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+  # Mains current, 0x5B offset 2-3, bit-15 encoding. The panel showed
+  # Current 2.1 A and the raw bytes were D1 80 -> 0x80D1 & 0x7FFF = 209 -> 2.09.
+  #
+  # NOTE: this is the caravan's TOTAL mains current, not the heater's own draw.
+  # An earlier reading of this field as a 12 V load was withdrawn: a 12 V load
+  # cannot change by 4.4 A when a 1000 W consumer switches in.
+  - platform: template
+    name: "TIN Mains Current"
+    id: alde_mains_current
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+  # Battery voltage, 0xD6 offset 6-7, bit-15 encoding. The panel showed
+  # 12V Bat 13.2 V and the raw bytes were 1D 85 -> 0x851D & 0x7FFF = 1309.
+  - platform: template
+    name: "TIN Battery Voltage"
+    id: alde_battery_voltage
+    unit_of_measurement: "V"
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 2
+  # Hot water TARGET temperature, 0xC4 offset 0-1 — not a state code. The three
+  # panel choices are three target temperatures in decikelvin, verified 4/4:
+  #   off    = AA 0A = 2730 =  0.0 degC   (an impossible temperature used as a sentinel)
+  #   flow   = 9E 0C = 3230 = 50.0 degC
+  #   full   = 34 0D = 3380 = 65.0 degC
+  # The gate deliberately allows 0.0, because 0 IS a valid state here.
+  - platform: template
+    name: "TIN Hot Water Target"
+    id: alde_hotwater_target
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+  # Permitted electric power in watts, 0x06 offset 0-1, verified 3/3
+  # (1000/2000/3000 for panel selections 1/2/3 kW).
+  #
+  # NOTE: this is a STATE, not the user's setting. The field dropped one step
+  # five times without anyone touching the panel — on hot water full and on air
+  # conditioning on. It is the appliance's load shedding. An automation that
+  # reads it as "the user's choice" will see it change by itself.
+  - platform: template
+    name: "TIN Permitted Electric Power"
+    id: alde_electric_allowed
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+  # Air conditioner light level in percent, 0x97 offset 6, verified 2/2
+  # (0 -> 100 -> 0 on panel switch). 0x08 offset 6 followed to 100 and 0 as
+  # well, but sat at 123 beforehand and is therefore NOT the same field.
+  #
+  # The panel can only switch the light on and off, so a third-party claim of
+  # five steps (20/40/60/80/100) cannot be tested here. 0 and 100 do not
+  # distinguish percent from a five-step scale.
+  - platform: template
+    name: "TIN AC Light"
+    id: alde_ac_light
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:lightbulb
+  # UNRESOLVED FIELD. The name says only where the value comes from — exactly
+  # the caution that was missing when 0xD3 was called "status" and 0x03 was
+  # called "target temperature". MUST NOT be used for control:
+  #
+  #   97 offset 0  THE OUTDOOR-TEMPERATURE HYPOTHESIS IS DISPROVEN. The field
+  #                rose 3.4 degC in 90 seconds when the air conditioner was
+  #                switched on, and fell back slowly afterwards — three times.
+  #                No outdoor sensor does that. It is a sensor heated by the
+  #                air conditioner; positively characterised as an
+  #                AC-internal sensor, but its exact placement is unknown.
+  - platform: template
+    name: "TIN Temperature 97-0"
+    id: alde_temp_97_0
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+  # APPLIED electric power in watts, 0x55 offset 0-1. Only 0, 1000 and 2000
+  # have ever been observed. This field was called "fan" for a while; that was
+  # withdrawn, and it was settled two ways on the same night:
+  #   * The panel showed Fan rotation = 0 rpm while the field read 1000, and
+  #     later 3488 rpm while the field STILL read 1000. Two non-zero
+  #     comparisons, both disagreeing. It is not the fan.
+  #   * When the field fell 1000 -> 0, the mains current fell by 4.40 A, which
+  #     at 230 V is 1012 W. The current follows the field across three levels.
+  #
+  # NOTE: this is ALDE's own consumption, not the caravan's. During air
+  # conditioning the field sat at 0 while the caravan drew 3 A extra. Total
+  # consumption is in alde_mains_current (0x5B offset 2), which measures the
+  # mains current for everything.
+  #
+  # Together the two power fields divide the work: 0x06 = PERMITTED power,
+  # 0x55 = APPLIED power.
+  - platform: template
+    name: "TIN Applied Electric Power"
+    id: alde_electric_applied
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+  # Burner fan, 0x5B offset 6, one raw byte times 32.
+  # The field read 0x00 in ALL earlier recordings because the burner had never
+  # run — gas enabled is not the same as burner lit.
+  #
+  # The scaling is confirmed at two widely separated panel readings:
+  #     byte 109 -> panel 3488 rpm      byte 68 -> panel 2176 rpm
+  # both exactly a factor of 32. On top of that the panel's own numbers are
+  # ALWAYS multiples of 32, which only makes sense if the representation is one
+  # byte << 5. 0-255 covers 0-8160 rpm.
+  - platform: template
+    name: "TIN Burner Fan"
+    id: alde_burner_fan
+    unit_of_measurement: "rpm"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:fan
+
+binary_sensor:
+  # Gas on/off, 0x85 offset 0, verified 4/4 — including an on-and-off within
+  # one second. Only two values have been observed; everything else is NOT
+  # published, so an unknown state does not silently become "off".
+  - platform: template
+    name: "TIN Gas"
+    id: alde_gas
+    icon: mdi:fire
+
+interval:
+  - interval: 100ms
+    then:
+      - lambda: |-
+          static std::vector<uint8_t> buf;
+          static uint32_t frames_ok = 0, frames_bad = 0, tick = 0;
+
+          // Last published value per sensor. The bus sends ~2.6 frames/s per
+          // PID; without a change filter ten sensors would mean ~26 writes per
+          // second into the recorder database.
+          static float pub_room = -999.0f, pub_sp = -999.0f, pub_gly = -999.0f,
+                       pub_water = -999.0f, pub_pcb = -999.0f,
+                       pub_cur = -999.0f, pub_bat = -999.0f, pub_55 = -999.0f,
+                       pub_970 = -999.0f, pub_fan = -999.0f,
+                       pub_vv = -999.0f, pub_kw = -999.0f, pub_lys = -999.0f;
+          // Gas is tri-state in the parser: -1 = not seen yet. Without that
+          // third state an unknown byte value would turn into "gas off".
+          static int pub_gas = -1;
+
+          // Raw 16-bit little-endian read. Returns false if the frame is too
+          // short. The interpretation itself lives in the three helpers below —
+          // the bus uses more than one encoding and they must be kept apart.
+          auto u16 = [](const uint8_t *d, int n, int off, uint16_t *out) -> bool {
+            if (off + 1 >= n) return false;
+            *out = (uint16_t) (d[off] | (d[off + 1] << 8));
+            return true;
+          };
+
+          // Temperature read. 16-bit little-endian decikelvin.
+          // Returns false on a sentinel (0xFFFF/0x7FFF = not available) or if
+          // the frame is too short — the value is then not published at all.
+          auto dk = [&u16](const uint8_t *d, int n, int off, float *out) -> bool {
+            uint16_t raw;
+            if (!u16(d, n, off, &raw)) return false;
+            if (raw == 0xFFFF || raw == 0x7FFF) return false;
+            *out = ((int) raw - 2730) / 10.0f;
+            return true;
+          };
+
+          // Current and voltage. Bit 15 is set as a type marker and is masked
+          // away; the rest is hundredths. Verified against the panel's service
+          // menu: 0x851D -> 13.09 V (panel 13.2) and 0x80D1 -> 2.09 A
+          // (panel 2.1).
+          //
+          // THERE IS NO SENTINEL FILTER HERE, and that is deliberate: 0x7FFF is
+          // exactly the bits the masking keeps, so a sentinel filter would hit
+          // the legal reading 327.67. The sentinel 0xFFFF would conversely be
+          // read as 327.67 — hence the gate at the call site, which rejects it.
+          // The two encodings share a bit pattern and must not share a filter.
+          auto b15 = [&u16](const uint8_t *d, int n, int off, float *out) -> bool {
+            uint16_t raw;
+            if (!u16(d, n, off, &raw)) return false;
+            *out = (raw & 0x7FFF) / 100.0f;
+            return true;
+          };
+
+          // Last seen 0x3C request, so the following 0x3D slot can be paired
+          // with it. Without the pairing you cannot see WHO is not answering.
+          static uint8_t last_req[8];
+          static int last_req_len = 0;
+          static bool have_req = false;
+          // Counted for 0x3D: slots without a response versus slots with one.
+          static uint32_t d3d_empty = 0, d3d_resp = 0;
+
+          // ---- Reassembly of LIN-TP multi-frame messages. PURELY PASSIVE. ----
+          // Index 0 = request (0x3C), 1 = response (0x3D). The two directions
+          // are independent transport channels and are assembled separately.
+          static const int TP_MAX = 512;
+          static uint8_t tp_buf[2][TP_MAX];
+          static int tp_len[2] = {0, 0}, tp_got[2] = {0, 0};
+          static uint8_t tp_nad[2] = {0, 0}, tp_sn[2] = {0, 0};
+          static bool tp_act[2] = {false, false};
+          static uint32_t tp_start[2] = {0, 0};
+          static uint32_t tp_done = 0, tp_abort = 0, tp_quiet = 0, tp_cf = 0;
+
+          // The previous message is kept PER (direction, SID) — not per
+          // direction alone. 0x3D carries several services (0xBA 97 B,
+          // 0xF2 6 B, 0xF9 2 B), so a single shared buffer was overwritten by
+          // the next service and the change line disappeared entirely. The same
+          // goes for the rate limit: the frequent small messages starved the
+          // large block's hexdump.
+          static const int PV_SLOTS = 6, PV_MAX = 128;
+          static uint8_t pv_buf[PV_SLOTS][PV_MAX];
+          static uint8_t pv_dir[PV_SLOTS], pv_sid[PV_SLOTS];
+          static int pv_len[PV_SLOTS];
+          static uint32_t pv_dump[PV_SLOTS];
+          static bool pv_used[PV_SLOTS];
+
+          // Count of ALL valid PIDs. Without it, signal frames we do not decode
+          // are invisible — and the temperatures could be sitting in a frame we
+          // are not even looking at.
+          static uint32_t pid_count[256];
+
+          // Header WITHOUT a response, per PID.
+          //
+          // pid_count only counts RECEIVED frames. A PID where the master
+          // issues a header but nobody answers is therefore INVISIBLE in the
+          // overview — and that is exactly the kind of slot worth finding: a
+          // free slot is the only place an extra device could speak without
+          // colliding with a publisher.
+          //
+          // Note what the ratio means:
+          //   responses > 0, empty = 0   fixed publisher, always present -> COLLISION
+          //   responses = 0, empty > 0   slot nobody fills               -> OPENING
+          //   both > 0                   publisher that answers only sometimes
+          static uint32_t pid_empty[256];
+
+          // Last seen payload per PID. Signal frames are logged ONLY on change —
+          // the bus runs ~2.6 frames/s per PID, so unconditional logging would
+          // drown everything. The change line is at the same time exactly what
+          // differential measurement needs: which bytes moved when the panel
+          // was operated.
+          static uint8_t pid_last[256][8];
+          static uint8_t pid_lastlen[256];
+
+          // Full hexdump at most every 2 seconds per direction; the change line
+          // is always emitted, because that is what the differential
+          // measurement is built on.
+          static const uint32_t TP_DUMP_MS = 2000;
+
+          // Feeds one diagnostic frame into the reassembly. Returns nothing and
+          // sends nothing — it only logs.
+          auto tp_feed = [](int dir, const uint8_t *d, int n, const char *tag) {
+            if (n < 2) return;
+            uint8_t nad = d[0], pci = d[1];
+            int type = pci >> 4;
+
+            if (type == 0) {
+              // Single Frame: the whole message is in this one frame.
+              int L = pci & 0x0F;
+              if (L < 1 || L > n - 2) { tp_abort++; tp_act[dir] = false; return; }
+              for (int k = 0; k < L; k++) tp_buf[dir][k] = d[2 + k];
+              tp_len[dir] = L; tp_nad[dir] = nad; tp_act[dir] = false;
+            } else if (type == 1) {
+              // First Frame: LEN is 12 bits split across the PCI low nibble and
+              // the next byte.
+              if (n < 3) return;
+              int L = ((pci & 0x0F) << 8) | d[2];
+              if (L < 7 || L > TP_MAX) {
+                ESP_LOGD("alde", "TP %s: LEN=%d beyond capacity (max %d) - discarded", tag, L, TP_MAX);
+                tp_abort++; tp_act[dir] = false; return;
+              }
+              int take = n - 3; if (take > L) take = L;
+              for (int k = 0; k < take; k++) tp_buf[dir][k] = d[3 + k];
+              tp_len[dir] = L; tp_got[dir] = take; tp_nad[dir] = nad;
+              tp_sn[dir] = 1; tp_act[dir] = true; tp_start[dir] = millis();
+              return;
+            } else if (type == 2) {
+              // Consecutive Frame. The sequence number runs 1..15 and then 0.
+              tp_cf++;
+              if (!tp_act[dir]) { tp_abort++; return; }
+              uint8_t sn = pci & 0x0F;
+              if (nad != tp_nad[dir] || sn != tp_sn[dir]) {
+                ESP_LOGD("alde", "TP %s: break (expected nad=%02X sn=%u, got nad=%02X sn=%u) - message discarded",
+                         tag, tp_nad[dir], tp_sn[dir], nad, sn);
+                tp_abort++; tp_act[dir] = false; return;
+              }
+              int room = tp_len[dir] - tp_got[dir];
+              int take = n - 2; if (take > room) take = room;
+              for (int k = 0; k < take; k++) tp_buf[dir][tp_got[dir] + k] = d[2 + k];
+              tp_got[dir] += take;
+              tp_sn[dir] = (tp_sn[dir] >= 15) ? 0 : tp_sn[dir] + 1;
+              if (tp_got[dir] < tp_len[dir]) return;
+              tp_act[dir] = false;
+            } else {
+              return;
+            }
+
+            // --- Complete message ---
+            tp_done++;
+            int L = tp_len[dir];
+            const uint8_t *m = tp_buf[dir];
+            uint8_t sid = m[0];
+            // The payload starts with the function ID little-endian, cf. 30 03
+            // = 0x0330 being NAD 01's function. Shown as an aid to reading.
+            unsigned fn = (L >= 3) ? (unsigned) ((m[2] << 8) | m[1]) : 0;
+
+            // Find (or reserve) the slot belonging to exactly this
+            // (direction, SID). See the pv_* comment above.
+            int slot = -1;
+            for (int k = 0; k < PV_SLOTS; k++)
+              if (pv_used[k] && pv_dir[k] == dir && pv_sid[k] == sid) { slot = k; break; }
+            if (slot < 0)
+              for (int k = 0; k < PV_SLOTS; k++)
+                if (!pv_used[k]) {
+                  slot = k; pv_used[k] = true; pv_dir[k] = dir; pv_sid[k] = sid;
+                  pv_len[k] = 0; pv_dump[k] = 0; break;
+                }
+
+            // Which offsets have moved since the last message of the same
+            // shape? That is the core of the differential measurement: time
+            // bases always tick, while an operator action shows up in exactly
+            // the bytes it controls.
+            char chg[120]; int cp = 0, nchg = -1; bool cut = false;
+            if (slot >= 0 && pv_len[slot] == L && L <= PV_MAX) {
+              nchg = 0;
+              for (int k = 0; k < L; k++) {
+                if (m[k] == pv_buf[slot][k]) continue;
+                nchg++;
+                if (cp < (int) sizeof(chg) - 12) cp += sprintf(chg + cp, "%d ", k);
+                else cut = true;
+              }
+            }
+            if (cp > 0) chg[cp - 1] = 0; else chg[0] = 0;
+
+            uint32_t now = millis();
+            bool full = (slot < 0) || (pv_len[slot] != L) || (now - pv_dump[slot] >= TP_DUMP_MS);
+            if (full && slot >= 0) pv_dump[slot] = now;
+            if (full) {
+              ESP_LOGD("alde", "TP %s nad=%02X sid=%02X fn=0x%04X len=%d  (offset 0 = SID = M1)",
+                       tag, tp_nad[dir], sid, fn, L);
+              for (int off = 0; off < L; off += 16) {
+                char hx[16*3+1], as[17];
+                int hp = 0, ap = 0;
+                for (int k = off; k < off + 16 && k < L; k++) {
+                  hp += sprintf(hx + hp, "%02X ", m[k]);
+                  as[ap++] = (m[k] >= 0x20 && m[k] < 0x7F) ? (char) m[k] : '.';
+                }
+                if (hp > 0) hx[hp - 1] = 0; else hx[0] = 0;
+                as[ap] = 0;
+                ESP_LOGD("alde", "  [%03d] %-47s |%s|", off, hx, as);
+              }
+            } else {
+              tp_quiet++;
+            }
+            if (nchg > 0)
+              ESP_LOGD("alde", "TP %s sid=%02X: %d byte(s) changed @ %s%s",
+                       tag, sid, nchg, chg, cut ? " ..." : "");
+
+            if (slot >= 0 && L <= PV_MAX) {
+              for (int k = 0; k < L; k++) pv_buf[slot][k] = m[k];
+              pv_len[slot] = L;
+            }
+          };
+
+          // LIN checksum. Classic (without PID) for the diagnostic frames
+          // 0x3C/0x3D, enhanced (with PID) for everything else.
+          auto lin_cs = [](uint8_t pid, const uint8_t *d, int n, bool classic) -> uint8_t {
+            uint16_t sum = classic ? 0 : pid;
+            for (int k = 0; k < n; k++) {
+              sum += d[k];
+              if (sum > 0xFF) sum = (sum & 0xFF) + 1;
+            }
+            return (uint8_t) ~sum;
+          };
+
+          // Hexdump of the WHOLE frame. An earlier parser printed a fixed
+          // 6-byte window and therefore truncated diagnostic frames, which are
+          // always 8 data bytes — the Function ID in ReadByIdentifier was lost.
+          auto hexs = [](const uint8_t *d, int n, char *out, int cap) {
+            int p = 0;
+            for (int k = 0; k < n && p + 4 <= cap; k++)
+              p += sprintf(out + p, "%02X ", d[k]);
+            if (p > 0) out[p - 1] = 0; else out[0] = 0;
+          };
+
+          // Short textual reading of a diagnostic frame (LIN transport layer).
+          // Purely for the log — no decisions are made on it.
+          auto tp_note = [](const uint8_t *d, int n, char *out, int cap) {
+            if (n < 2) { snprintf(out, cap, "too short"); return; }
+            uint8_t nad = d[0], pci = d[1];
+            int type = pci >> 4;
+            if (type == 0) {
+              if (n < 3) { snprintf(out, cap, "nad=%02X SF len=%d", nad, pci & 0x0F); return; }
+              snprintf(out, cap, "nad=%02X SF len=%d sid=%02X", nad, pci & 0x0F, d[2]);
+            } else if (type == 1) {
+              int len = ((pci & 0x0F) << 8) | (n > 2 ? d[2] : 0);
+              if (n < 4) { snprintf(out, cap, "nad=%02X FF len=%d", nad, len); return; }
+              snprintf(out, cap, "nad=%02X FF len=%d sid=%02X", nad, len, d[3]);
+            } else if (type == 2) {
+              snprintf(out, cap, "nad=%02X CF sn=%d", nad, pci & 0x0F);
+            } else {
+              snprintf(out, cap, "nad=%02X pci=%02X unknown", nad, pci);
+            }
+          };
+
+          while (id(tin_uart).available()) {
+            uint8_t b;
+            id(tin_uart).read_byte(&b);
+            buf.push_back(b);
+          }
+          // Emergency brake. In normal operation the buffer is drained by the
+          // consuming logic below.
+          if (buf.size() > 512) buf.erase(buf.begin(), buf.end() - 512);
+
+          // --- SEQUENCE RECORDER -------------------------------------------
+          // Recording buffer of HEADERS in arrival order. It is NOT a ring: it
+          // fills once and stops, so a recording has a known start. Reset with
+          // the button to record again.
+          // Empty and rejected slots are stored too: a header the master issues
+          // is part of the schedule whether or not anybody fills it. Without
+          // them 0x08 would be missing from the sequence.
+          //
+          // 2048 entries of 4 bytes = 8 KB ~ 60 s at ~34 frames/s.
+          static const int SEQ_MAX = 2048;
+          static uint8_t seq_pid[SEQ_MAX];
+          static uint8_t seq_st[SEQ_MAX];      // 0=valid 1=empty 2=rejected
+          static uint16_t seq_dt[SEQ_MAX];     // ms since previous ENTRY
+          static int seq_n = 0;
+          static bool seq_full = false;
+          static uint32_t seq_last_ms = 0;
+          static int seq_dump_pos = -1;        // >=0 while a dump is running
+
+          if (id(seq_arm)) {
+            id(seq_arm) = false;
+            seq_n = 0; seq_full = false; seq_dump_pos = -1;
+            seq_last_ms = millis();
+            ESP_LOGD("alde", "SEQUENCE: reset, recording (capacity %d entries)", SEQ_MAX);
+          }
+
+          auto seq_push = [&](uint8_t pid, uint8_t st) {
+            if (seq_n >= SEQ_MAX) { seq_full = true; return; }
+            uint32_t now = millis();
+            uint32_t d = now - seq_last_ms;
+            seq_last_ms = now;
+            seq_pid[seq_n] = pid;
+            seq_st[seq_n] = st;
+            seq_dt[seq_n] = d > 65535 ? 65535 : (uint16_t) d;
+            seq_n++;
+          };
+
+          int consumed = 0;
+          int i = 0;
+          while (true) {
+            // Find the next header 0x00 0x55 <PID>
+            int h = -1;
+            for (int k = i; k + 2 < (int) buf.size(); k++)
+              if (buf[k] == 0x00 && buf[k+1] == 0x55) { h = k; break; }
+            if (h < 0) break;
+
+            // The frame is delimited by the FOLLOWING header. Without it the
+            // frame is not complete yet, and the bytes stay for the next tick.
+            int nxt = -1;
+            for (int k = h + 3; k + 2 < (int) buf.size(); k++)
+              if (buf[k] == 0x00 && buf[k+1] == 0x55) { nxt = k; break; }
+            if (nxt < 0) break;
+
+            uint8_t pid = buf[h+2];
+            int raw = nxt - (h + 3);
+
+            if (raw == 0) {
+              // Header without a response. Counted for ALL PIDs, not just
+              // 0x3D. The detailed logging below is still 0x3D-specific,
+              // because only there is there a 0x3C request to pair it with.
+              pid_empty[pid]++;
+              seq_push(pid, 1);
+              if (pid == 0x7D) {
+                d3d_empty++;
+                char req[3*8+1] = {0}, note[48] = {0};
+                if (have_req) { hexs(last_req, last_req_len, req, sizeof(req));
+                                tp_note(last_req, last_req_len, note, sizeof(note)); }
+                ESP_LOGD("alde", "3D: EMPTY SLOT   after 3C [%s] %s",
+                         have_req ? req : "?", have_req ? note : "");
+                have_req = false;
+              }
+            } else {
+              int dlen = raw - 1;
+              const uint8_t *d = &buf[h+3];
+              uint8_t cs = buf[nxt-1];
+              uint8_t fid = pid & 0x3F;
+              bool classic = (fid == 0x3C || fid == 0x3D);
+
+              if (dlen < 1 || dlen > 8 || lin_cs(pid, d, dlen, classic) != cs) {
+                frames_bad++;
+                seq_push(pid, 2);
+                if (frames_bad % 10 == 1)
+                  ESP_LOGD("alde", "Rejected frame pid=0x%02X len=%d cs=0x%02X", pid, dlen, cs);
+              } else {
+                frames_ok++;
+                pid_count[pid]++;
+                seq_push(pid, 0);
+
+                // Raw logging of ALL signal frames on change — including those
+                // without a decoding branch, and including 0x97/0x47 if the
+                // sanity gate below rejects the value. Without this you measure
+                // formula + gate instead of what the bus actually sends.
+                // Diagnostic frames (0x3C/0x3D) are handled by the TP logic and
+                // are skipped here.
+                if (fid != 0x3C && fid != 0x3D) {
+                  int n = dlen > 8 ? 8 : dlen;
+                  bool diff = (pid_lastlen[pid] != n);
+                  if (!diff)
+                    for (int k = 0; k < n; k++)
+                      if (pid_last[pid][k] != d[k]) { diff = true; break; }
+                  if (diff) {
+                    char hex[3*8+1], ch[64]; int cp = 0;
+                    hexs(d, n, hex, sizeof(hex));
+                    if (pid_lastlen[pid] == n)
+                      for (int k = 0; k < n; k++)
+                        if (pid_last[pid][k] != d[k] && cp < (int) sizeof(ch) - 8)
+                          cp += sprintf(ch + cp, "%d ", k);
+                    if (cp > 0) ch[cp - 1] = 0; else ch[0] = 0;
+                    ESP_LOGD("alde", "SIG %02X (len=%d): %s%s%s",
+                             pid, n, hex, cp ? "   changed @ " : "", ch);
+                    pid_lastlen[pid] = n;
+                    for (int k = 0; k < n; k++) pid_last[pid][k] = d[k];
+                  }
+                }
+
+                float t;
+                if (pid == 0x03) {
+                  // SETPOINT — but see the warning on the sensor above: the
+                  // field only carries the setpoint while the air conditioning
+                  // unit is dormant.
+                  if (dk(d, dlen, 0, &t) && t > 4.0f && t < 40.0f && t != pub_sp) {
+                    pub_sp = t; id(alde_setpoint).publish_state(t);
+                  }
+                } else if (pid == 0x47) {
+                  // ROOM TEMPERATURE.
+                  if (dk(d, dlen, 0, &t) && t > -20.0f && t < 60.0f && t != pub_room) {
+                    pub_room = t; id(alde_room_temp).publish_state(t);
+                  }
+                } else if (pid == 0x5B) {
+                  // THREE fields in three different encodings:
+                  //   @0-1  glycol temperature, decikelvin
+                  //   @2-3  the caravan's total MAINS CURRENT, bit 15
+                  //   @6    burner fan, one raw byte times 32
+                  if (dk(d, dlen, 0, &t) && t > -30.0f && t < 130.0f && t != pub_gly) {
+                    pub_gly = t; id(alde_glycol).publish_state(t);
+                  }
+                  // The gate catches 0xFFFF (-> 327.67) without touching 0x7FFF.
+                  if (b15(d, dlen, 2, &t) && t >= 0.0f && t < 100.0f && t != pub_cur) {
+                    pub_cur = t; id(alde_mains_current).publish_state(t);
+                  }
+                  // The fan. No sentinel and no gate beyond the byte width
+                  // itself: 0-255 covers 0-8160 rpm and the whole range is
+                  // physically possible. 0 means burner off and is a valid
+                  // reading, not a missing value.
+                  if (dlen > 6) {
+                    t = (float) d[6] * 32.0f;
+                    if (t != pub_fan) { pub_fan = t; id(alde_burner_fan).publish_state(t); }
+                  }
+                } else if (pid == 0xD6) {
+                  // Water temperature (decikelvin) AND battery voltage (bit 15).
+                  if (dk(d, dlen, 4, &t) && t > -30.0f && t < 130.0f && t != pub_water) {
+                    pub_water = t; id(alde_water_temp).publish_state(t);
+                  }
+                  if (b15(d, dlen, 6, &t) && t > 0.0f && t < 40.0f && t != pub_bat) {
+                    pub_bat = t; id(alde_battery_voltage).publish_state(t);
+                  }
+                } else if (pid == 0xD3) {
+                  // PCB temperature. The panel's service menu showed
+                  // PCB Temp 39.0 against raw 30 0C = 3120.
+                  if (dk(d, dlen, 0, &t) && t > -30.0f && t < 150.0f && t != pub_pcb) {
+                    pub_pcb = t; id(alde_pcb_temp).publish_state(t);
+                  }
+                } else if (pid == 0x55) {
+                  // ALDE'S APPLIED ELECTRIC POWER in watts. Raw 16-bit LE, no
+                  // scaling. Only 0, 1000 and 2000 have ever been observed. The
+                  // gate keeps both 0xFFFF and 0x7FFF out; 0 is a valid reading
+                  // and means the element is off.
+                  uint16_t w55;
+                  if (u16(d, dlen, 0, &w55) && w55 <= 5000) {
+                    t = (float) w55;
+                    if (t != pub_55) { pub_55 = t; id(alde_electric_applied).publish_state(t); }
+                  }
+                } else if (pid == 0xC4) {
+                  // Hot water target temperature. 0.0 degC means OFF, so the
+                  // gate has to let zero through — unlike the other temperature
+                  // branches, where 0 would be suspicious.
+                  if (dk(d, dlen, 0, &t) && t >= 0.0f && t < 100.0f && t != pub_vv) {
+                    pub_vv = t; id(alde_hotwater_target).publish_state(t);
+                  }
+                } else if (pid == 0x06) {
+                  // Permitted electric power in watts. Raw 16-bit LE, no scaling.
+                  uint16_t w;
+                  if (u16(d, dlen, 0, &w) && w <= 5000) {
+                    t = (float) w;
+                    if (t != pub_kw) { pub_kw = t; id(alde_electric_allowed).publish_state(t); }
+                  }
+                } else if (pid == 0x85) {
+                  // Gas. ONLY the two observed values are published. An "else
+                  // false" would turn any unknown state into "gas off" — and
+                  // this is a gas-related reading, so silence is the right
+                  // failure mode.
+                  if (dlen >= 1 && (d[0] == 0x02 || d[0] == 0x04)) {
+                    int g = (d[0] == 0x04) ? 1 : 0;
+                    if (g != pub_gas) { pub_gas = g; id(alde_gas).publish_state(g == 1); }
+                  }
+                } else if (pid == 0x97) {
+                  // UNRESOLVED at offset 0 — see the sensor definition.
+                  // Offset 6 is mapped: the AC light level in percent.
+                  // Offset 2-3 carries a target temperature and is deliberately
+                  // NOT published as a sensor; see docs/PROTOCOL.md.
+                  if (dk(d, dlen, 0, &t) && t > -50.0f && t < 80.0f && t != pub_970) {
+                    pub_970 = t; id(alde_temp_97_0).publish_state(t);
+                  }
+                  if (dlen > 6 && d[6] <= 100) {
+                    t = (float) d[6];
+                    if (t != pub_lys) { pub_lys = t; id(alde_ac_light).publish_state(t); }
+                  }
+                } else if (pid == 0x3C) {
+                  // Master request. The WHOLE frame is dumped — see hexs()
+                  // above. CFs are not logged raw: they are reproduced in full
+                  // in the reassembled message, and 16 raw lines per block
+                  // drown the log.
+                  if (dlen < 2 || (d[1] >> 4) != 2) {
+                    char hex[3*8+1], note[48];
+                    hexs(d, dlen, hex, sizeof(hex));
+                    tp_note(d, dlen, note, sizeof(note));
+                    ESP_LOGD("alde", "3C req (len=%d): %s   %s", dlen, hex, note);
+                  }
+                  tp_feed(0, d, dlen, "3C");
+                  last_req_len = dlen > 8 ? 8 : dlen;
+                  for (int k = 0; k < last_req_len; k++) last_req[k] = d[k];
+                  have_req = true;
+                } else if (pid == 0x7D) {
+                  // Slave response on the diagnostic slot. RECEIVE-ONLY: this
+                  // branch only logs and sends nothing on the bus.
+                  d3d_resp++;
+                  char hex[3*8+1], note[48];
+                  char req[3*8+1] = {0}, reqnote[48] = {0};
+                  hexs(d, dlen, hex, sizeof(hex));
+                  tp_note(d, dlen, note, sizeof(note));
+                  if (have_req) { hexs(last_req, last_req_len, req, sizeof(req));
+                                  tp_note(last_req, last_req_len, reqnote, sizeof(reqnote)); }
+                  // The RSID position depends on the PCI type: SF has it in
+                  // d[2], FF in d[3], CF has none. Alde does NOT necessarily
+                  // follow LIN's RSID = SID + 0x40: the response to 0xBA carries
+                  // 0xBA, i.e. an echo. So it is compared against the actual
+                  // request instead of guessing a convention.
+                  char rs[48] = {0};
+                  int rtype = (dlen >= 2) ? (d[1] >> 4) : -1;
+                  int sidx = (rtype == 0) ? 2 : (rtype == 1 ? 3 : -1);
+                  if (sidx >= 0 && dlen > sidx) {
+                    uint8_t rsid = d[sidx];
+                    uint8_t reqsid = 0; bool known = false;
+                    if (have_req && last_req_len >= 2) {
+                      int qt = last_req[1] >> 4;
+                      int qi = (qt == 0) ? 2 : (qt == 1 ? 3 : -1);
+                      if (qi >= 0 && last_req_len > qi) { reqsid = last_req[qi]; known = true; }
+                    }
+                    if (rsid == 0x7F && dlen > sidx + 2)
+                      snprintf(rs, sizeof(rs), " NEG sid=%02X err=%02X", d[sidx+1], d[sidx+2]);
+                    else if (known && rsid == reqsid)
+                      snprintf(rs, sizeof(rs), " rsid=%02X (echo of sid)", rsid);
+                    else if (known && rsid == (uint8_t)(reqsid + 0x40))
+                      snprintf(rs, sizeof(rs), " rsid=%02X (sid %02X +0x40)", rsid, reqsid);
+                    else
+                      snprintf(rs, sizeof(rs), " rsid=%02X", rsid);
+                  }
+                  if (dlen < 2 || (d[1] >> 4) != 2)
+                    ESP_LOGD("alde", "3D RESPONSE (len=%d): %s   %s%s   after 3C [%s] %s",
+                             dlen, hex, note, rs, have_req ? req : "?", have_req ? reqnote : "");
+                  tp_feed(1, d, dlen, "3D");
+                  have_req = false;
+                }
+              }
+            }
+
+            consumed = nxt;
+            i = nxt;
+          }
+
+          // Only the bytes actually parsed are discarded. The rest waits.
+          if (consumed > 0) buf.erase(buf.begin(), buf.begin() + consumed);
+
+          // A half-finished multi-frame message that was never completed.
+          // Discarded rather than assembled wrongly — the emergency brake on
+          // buf can in principle cut a message in half on a busy bus.
+          for (int dir = 0; dir < 2; dir++)
+            if (tp_act[dir] && (millis() - tp_start[dir]) > 2000) {
+              ESP_LOGD("alde", "TP %s: timeout with %d/%d bytes - message discarded",
+                       dir ? "3D" : "3C", tp_got[dir], tp_len[dir]);
+              tp_act[dir] = false; tp_abort++;
+            }
+
+          // --- SEQUENCE DUMP -----------------------------------------------
+          // Paced: at most 12 lines per tick. Dumping it all at once would
+          // block the lambda for over a second and lose frames — and on an
+          // ESP32 that is also the road to a watchdog reset.
+          if (id(seq_dump_req)) {
+            id(seq_dump_req) = false;
+            seq_dump_pos = 0;
+            ESP_LOGD("alde", "SEQUENCE DUMP START: %d entries%s. Format: SEQ <idx> +<ms since previous> n=<in tick>: PID/status  (0=valid 1=empty 2=rejected)",
+                     seq_n, seq_full ? " (BUFFER FULL - recording stopped)" : "");
+          }
+          if (seq_dump_pos >= 0) {
+            int lines = 0;
+            while (seq_dump_pos < seq_n && lines < 12) {
+              int s = seq_dump_pos;
+              uint16_t d0 = seq_dt[s];
+              char line[280]; int lp = 0;
+              lp += sprintf(line + lp, "%02X/%u", seq_pid[s], seq_st[s]);
+              int k = s + 1;
+              // Entries with dt==0 arrived in the same parser tick and cannot
+              // be separated in time.
+              while (k < seq_n && seq_dt[k] == 0 && lp < (int) sizeof(line) - 8) {
+                lp += sprintf(line + lp, " %02X/%u", seq_pid[k], seq_st[k]);
+                k++;
+              }
+              ESP_LOGD("alde", "SEQ %04d +%04u n=%d: %s", s, d0, k - s, line);
+              seq_dump_pos = k;
+              lines++;
+            }
+            if (seq_dump_pos >= seq_n) {
+              ESP_LOGD("alde", "SEQUENCE DUMP END (%d entries)", seq_n);
+              seq_dump_pos = -1;
+            }
+          }
+
+          if (++tick % 100 == 0 && (frames_ok + frames_bad) > 0)
+            ESP_LOGD("alde", "Frames ok=%u rejected=%u (%.1f%% bad), buffer=%d B | 3D empty=%u responses=%u | TP complete=%u discarded=%u cf=%u dump_skipped=%u",
+                     frames_ok, frames_bad,
+                     100.0 * frames_bad / (frames_ok + frames_bad), (int) buf.size(),
+                     d3d_empty, d3d_resp, tp_done, tp_abort, tp_cf, tp_quiet);
+
+          // Full PID overview every 30 seconds. A PID that shows up here
+          // without having a branch above is a frame we are not looking at —
+          // and a possible home for measurements not yet found.
+          if (tick % 300 == 0) {
+            // Format: PID:responses/empty. The condition ALSO includes PIDs
+            // that are never answered — without them a completely free slot
+            // would be invisible, and those are exactly the ones worth finding.
+            char inv[420]; int ip = 0;
+            for (int p = 0; p < 256 && ip < (int) sizeof(inv) - 24; p++)
+              if (pid_count[p] || pid_empty[p])
+                ip += sprintf(inv + ip, "%02X:%u/%u ", p, pid_count[p], pid_empty[p]);
+            if (ip > 0) { inv[ip - 1] = 0; ESP_LOGD("alde", "PID overview (responses/empty): %s", inv); }
+          }
+
+          // Full snapshot of all signal frames every minute. Changes alone are
+          // not enough: a recording started after an intervention would
+          // otherwise show no values at all.
+          if (tick % 600 == 0) {
+            for (int p = 0; p < 256; p++) {
+              if (!pid_count[p] || !pid_lastlen[p]) continue;
+              uint8_t f = p & 0x3F;
+              if (f == 0x3C || f == 0x3D) continue;
+              char hex[3*8+1];
+              hexs(pid_last[p], pid_lastlen[p], hex, sizeof(hex));
+              ESP_LOGD("alde", "SNAP %02X (n=%u): %s", p, pid_count[p], hex);
+            }
+          }

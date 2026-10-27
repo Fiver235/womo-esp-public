@@ -1,0 +1,250 @@
+133 Multi-package-Nachrichten, 15 Marker, Quelle: raw (LIN-TP aus PID-3C/3D-Frames zusammengesetzt)
+
+
+=== AKTION 1 App: Soll +1 C ===
+#0010 14:58:06 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #11
+#0011 14:58:06 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x02 chk OK
+      payload: 01 00 68 0B FF FF 64 00 37 01 00 64 FF FF FF 05
+      Heizung=EIN b1=0x00 Soll=19.0°C u4..5=FF FF WW=normal El=0kW Gas=ein Prio=Gas u10..14=00 64 FF FF FF ctr=05
+      ACK #12 (ctr 0x02) OK (gleicher Counter, Truma-Muster)
+#0012 14:58:07 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x02 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x02  payload=00 FF
+
+=== AKTION 2 App: Soll -1 C ===
+#0017 14:59:04 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #18
+#0018 14:59:04 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x04 chk OK
+      payload: 01 00 5E 0B FF FF 64 00 37 01 00 64 FF FF FF 06
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=normal El=0kW Gas=ein Prio=Gas u10..14=00 64 FF FF FF ctr=06
+      diff zu vorherigem gleichen Typ: @2:68->5E @15:05->06
+      ACK #19 (ctr 0x04) OK (gleicher Counter, Truma-Muster)
+#0019 14:59:06 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x04 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x04  payload=00 FF
+
+=== AKTION 3 App: Heizung aus / ein ===
+#0023 15:00:10 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #24
+#0024 15:00:10 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x06 chk OK
+      payload: 00 00 5E 0B FF FF 64 00 37 01 00 64 FF FF FF 07
+      Heizung=AUS b1=0x00 Soll=18.0°C u4..5=FF FF WW=normal El=0kW Gas=ein Prio=Gas u10..14=00 64 FF FF FF ctr=07
+      diff zu vorherigem gleichen Typ: @0:01->00 @15:06->07
+      ACK #25 (ctr 0x06) OK (gleicher Counter, Truma-Muster)
+#0025 15:00:11 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x06 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x06  payload=00 FF
+#0027 15:00:36 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #28
+#0028 15:00:37 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x08 chk OK
+      payload: 01 00 5E 0B FF FF 64 00 37 01 00 64 FF FF FF 07
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=normal El=0kW Gas=ein Prio=Gas u10..14=00 64 FF FF FF ctr=07
+      diff zu vorherigem gleichen Typ: @0:00->01
+      ACK #29 (ctr 0x08) OK (gleicher Counter, Truma-Muster)
+#0029 15:00:38 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x08 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x08  payload=00 FF
+#0030 15:00:39 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #31
+#0031 15:00:39 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x0B chk OK
+      payload: 01 00 5E 0B FF FF 00 00 37 01 00 64 FF FF FF 07
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=ein Prio=Gas u10..14=00 64 FF FF FF ctr=07
+      diff zu vorherigem gleichen Typ: @6:64->00
+      ACK #32 (ctr 0x0B) OK (gleicher Counter, Truma-Muster)
+#0032 15:00:40 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x0B chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x0B  payload=00 FF
+#0033 15:00:42 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #34
+#0034 15:00:42 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x0E chk OK
+      payload: 01 00 5E 0B FF FF 00 00 00 01 00 64 FF FF FF 07
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=07
+      diff zu vorherigem gleichen Typ: @8:37->00
+      ACK #35 (ctr 0x0E) OK (gleicher Counter, Truma-Muster)
+#0035 15:00:43 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x0E chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x0E  payload=00 FF
+
+=== AKTION 4 App: Warmwasser aus->normal->boost->aus ===
+#0039 15:01:38 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #40
+#0040 15:01:38 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x12 chk OK
+      payload: 01 00 5E 0B FF FF 64 00 00 01 00 64 FF FF FF 07
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=normal El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=07
+      diff zu vorherigem gleichen Typ: @6:00->64
+      ACK #41 (ctr 0x12) OK (gleicher Counter, Truma-Muster)
+#0041 15:01:39 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x12 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x12  payload=00 FF
+
+=== AKTION 5 App: Elektro 0->1->2->3->off ===
+#0044 15:02:04 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #45
+#0045 15:02:04 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x14 chk OK
+      payload: 01 00 5E 0B FF FF C8 00 00 01 00 64 FF FF FF 08
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=boost El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=08
+      diff zu vorherigem gleichen Typ: @6:64->C8 @15:07->08
+      ACK #46 (ctr 0x14) OK (gleicher Counter, Truma-Muster)
+#0046 15:02:06 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x14 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x14  payload=00 FF
+#0048 15:02:27 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #49
+#0049 15:02:27 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x16 chk OK
+      payload: 01 00 5E 0B FF FF 00 00 00 01 00 64 FF FF FF 08
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=08
+      diff zu vorherigem gleichen Typ: @6:C8->00
+      ACK #50 (ctr 0x16) OK (gleicher Counter, Truma-Muster)
+#0050 15:02:28 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x16 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x16  payload=00 FF
+#0054 15:03:14 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #55
+#0055 15:03:14 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x18 chk OK
+      payload: 01 00 5E 0B FF FF 00 0A 00 01 00 64 FF FF FF 08
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=1kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=08
+      diff zu vorherigem gleichen Typ: @7:00->0A
+      ACK #56 (ctr 0x18) OK (gleicher Counter, Truma-Muster)
+#0056 15:03:15 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x18 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x18  payload=00 FF
+#0057 15:03:39 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #58
+#0058 15:03:39 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x1A chk OK
+      payload: 01 00 5E 0B FF FF 00 14 00 01 00 64 FF FF FF 08
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=2kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=08
+      diff zu vorherigem gleichen Typ: @7:0A->14
+      ACK #59 (ctr 0x1A) OK (gleicher Counter, Truma-Muster)
+#0059 15:03:40 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x1A chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x1A  payload=00 FF
+#0062 15:04:04 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #63
+#0063 15:04:04 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x1C chk OK
+      payload: 01 00 5E 0B FF FF 00 1E 00 01 00 64 FF FF FF 09
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=3kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=09
+      diff zu vorherigem gleichen Typ: @7:14->1E @15:08->09
+      ACK #64 (ctr 0x1C) OK (gleicher Counter, Truma-Muster)
+#0064 15:04:06 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x1C chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x1C  payload=00 FF
+#0066 15:04:29 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #67
+#0067 15:04:30 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x1E chk OK
+      payload: 01 00 5E 0B FF FF 00 00 00 01 00 64 FF FF FF 0A
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=0A
+      diff zu vorherigem gleichen Typ: @7:1E->00 @15:09->0A
+      ACK #68 (ctr 0x1E) OK (gleicher Counter, Truma-Muster)
+#0068 15:04:31 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x1E chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x1E  payload=00 FF
+
+=== AKTION 6 App: Gas off->on->off ===
+#0072 15:05:06 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #73
+#0073 15:05:06 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x20 chk OK
+      payload: 01 00 5E 0B FF FF 00 00 37 01 00 64 FF FF FF 0A
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=ein Prio=Gas u10..14=00 64 FF FF FF ctr=0A
+      diff zu vorherigem gleichen Typ: @8:00->37
+      ACK #74 (ctr 0x20) OK (gleicher Counter, Truma-Muster)
+#0074 15:05:07 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x20 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x20  payload=00 FF
+#0075 15:05:33 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #76
+#0076 15:05:33 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x22 chk OK
+      payload: 01 00 5E 0B FF FF 00 00 00 01 00 64 FF FF FF 0A
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=0A
+      diff zu vorherigem gleichen Typ: @8:37->00
+      ACK #77 (ctr 0x22) OK (gleicher Counter, Truma-Muster)
+#0077 15:05:34 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x22 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x22  payload=00 FF
+
+=== AKTION 7 App: Aventa Klimaautomatik aus->ein ===
+#0079 15:06:08 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #80
+#0080 15:06:08 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x24 chk OK
+      payload: 01 02 5E 0B FF FF 00 00 00 01 00 64 FF FF FF 0A
+      Heizung=EIN b1=0x02 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=0A
+      diff zu vorherigem gleichen Typ: @1:00->02
+      ACK #81 (ctr 0x24) OK (gleicher Counter, Truma-Muster)
+#0081 15:06:09 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x24 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x24  payload=00 FF
+#0084 15:06:44 [Panel->Box] READ  (Panel->Box: bitte senden) | L=0x1A
+      READ-Anfrage
+      -> Antwort #85
+#0085 15:06:44 [Box->Panel] UPLOAD (Box->Panel) | L=0x1A type=0x50 (ALDE-STATUS-CMD (Box)) len=16 ctr=0x26 chk OK
+      payload: 01 00 5E 0B FF FF 00 00 00 01 00 64 FF FF FF 0B
+      Heizung=EIN b1=0x00 Soll=18.0°C u4..5=FF FF WW=aus El=0kW Gas=aus Prio=Gas u10..14=00 64 FF FF FF ctr=0B
+      diff zu vorherigem gleichen Typ: @1:02->00 @15:0A->0B
+      ACK #86 (ctr 0x26) OK (gleicher Counter, Truma-Muster)
+#0086 15:06:46 [Panel->Box] DOWNLOAD (Panel->Box) | L=0x08 type=0x0D (ACK) len=2 ctr=0x26 chk OK
+      payload: 00 FF
+      ACK fuer Counter 0x26  payload=00 FF
+
+=== AKTION 8.1 Panel: Soll +1 C ===
+
+=== AKTION 8.2 Panel: Soll -1 C ===
+
+=== AKTION 8.3 Panel: Heizung aus/ein ===
+
+=== AKTION 8.4 Panel: WW aus->normal->boost->aus ===
+
+=== AKTION 8.5 Panel: Elektro aus->...->aus ===
+
+=== AKTION 8.6 Panel: Gas aus->ein->aus ===
+
+=== AKTION 8.7a Panel: Aventa (ignorieren) ===
+
+=== AKTION 8.7 Panel: Aventa ein->aus->ein ===
+
+=== Zusammenfassung ===
+SID    type  len   L     Anzahl  Bedeutung
+0xBA   --     --   0x1A      17  READ
+0xBB   0x0D    2   0x08      17  ACK
+0xBB   0x15   10   0x10      12  CLOCK
+0xBB   0x51   28   0x22      28  ALDE-STATUS
+0xBB   0x53   36   0x2A      17  ALDE-ADDON
+0xBB   0x55   12   0x12      13  ALDE-NIGHT
+0xBB   0x57   12   0x12      12  ALDE-DAY
+0xFA   0x50   16   0x1A      17  ALDE-STATUS-CMD (Box)
+
+Box->Panel-Nachrichten: 17
+  #0011 14:58:06 type=0x50 len=16 L=0x1A ACK #12 (ctr 0x02) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0018 14:59:04 type=0x50 len=16 L=0x1A ACK #19 (ctr 0x04) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0024 15:00:10 type=0x50 len=16 L=0x1A ACK #25 (ctr 0x06) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0028 15:00:37 type=0x50 len=16 L=0x1A ACK #29 (ctr 0x08) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0031 15:00:39 type=0x50 len=16 L=0x1A ACK #32 (ctr 0x0B) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0034 15:00:42 type=0x50 len=16 L=0x1A ACK #35 (ctr 0x0E) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0040 15:01:38 type=0x50 len=16 L=0x1A ACK #41 (ctr 0x12) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0045 15:02:04 type=0x50 len=16 L=0x1A ACK #46 (ctr 0x14) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0049 15:02:27 type=0x50 len=16 L=0x1A ACK #50 (ctr 0x16) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0055 15:03:14 type=0x50 len=16 L=0x1A ACK #56 (ctr 0x18) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0058 15:03:39 type=0x50 len=16 L=0x1A ACK #59 (ctr 0x1A) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0063 15:04:04 type=0x50 len=16 L=0x1A ACK #64 (ctr 0x1C) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0067 15:04:30 type=0x50 len=16 L=0x1A ACK #68 (ctr 0x1E) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0073 15:05:06 type=0x50 len=16 L=0x1A ACK #74 (ctr 0x20) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0076 15:05:33 type=0x50 len=16 L=0x1A ACK #77 (ctr 0x22) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0080 15:06:08 type=0x50 len=16 L=0x1A ACK #81 (ctr 0x24) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+  #0085 15:06:44 type=0x50 len=16 L=0x1A ACK #86 (ctr 0x26) OK (gleicher Counter, Truma-Muster)  <-- BEFEHLSKANDIDAT
+
+CSV geschrieben: logs/auswertung-b1.csv

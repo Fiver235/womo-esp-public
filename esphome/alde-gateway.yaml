@@ -1,0 +1,88 @@
+# ===========================================================================
+# Alde/Truma-Gateway – Ersatz fuer die Truma iNet Box
+#
+#   LIN-A  TIN-Bus (rot, RJ12 am Boiler/"Control panel")  -> nur mitlesen
+#   LIN-B  JP3 "External panel" am Alde-Bedienteil        -> steuern (Master)
+#
+# Hardware: ESP32-WROOM-32 DevKit, 2x TJA1020-Breakout, 12V->5V Buck.
+# Pins:
+#   LIN-A  TX GPIO17 / RX GPIO16   (UART2, 9600 8N2)   -- TX wird nie benutzt
+#   LIN-B  TX GPIO27 / RX GPIO26   (UART1, 19200 8N1)
+# GND von ESP32, beiden Transceivern und Fahrzeugmasse verbinden!
+#
+# Phasen (siehe ../PLAN.md):
+#   Phase 1: nur packages/tin_reader.yaml aktiv lassen, JP3 auskommentieren.
+#   Phase 2: packages/jp3_control.yaml dazu.
+# ===========================================================================
+
+substitutions:
+  name: alde-gateway
+  friendly_name: "Alde Gateway"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: "iNet-Box-Ersatz: TIN-Bus lesen, Alde via JP3 steuern"
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf   # alde3020 (JP3) braucht IDF fuer den LIN-Break
+
+logger:
+  level: DEBUG      # Phase 1/2: DEBUG fuer Bus-Mitschnitte; spaeter INFO
+  baud_rate: 0      # UART0 nicht fuer Logs belegen (nur ueber WLAN/API)
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret api_encryption_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  fast_connect: true
+  power_save_mode: none
+  ap:
+    ssid: "Alde-Gateway Fallback"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+# Lokale Bedienoberflaeche ohne Home Assistant (http://alde-gateway.local)
+web_server:
+  port: 80
+  version: 3
+  auth:
+    type: digest
+    username: !secret web_username
+    password: !secret web_password
+
+# Optional: MQTT statt/zusaetzlich zur HA-API
+# mqtt:
+#   broker: !secret mqtt_broker
+#   discovery: true
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+button:
+  - platform: restart
+    name: "Gateway Restart"
+
+sensor:
+  - platform: wifi_signal
+    name: "Gateway WiFi Signal"
+    update_interval: 60s
+  - platform: uptime
+    name: "Gateway Uptime"
+
+packages:
+  tin_reader: !include packages/tin_reader.yaml
+  # Phase 2 – erst aktivieren, wenn JP3 verkabelt und im Panel freigeschaltet ist:
+  jp3_control: !include packages/jp3_control.yaml
