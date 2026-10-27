@@ -39,6 +39,16 @@ Proxy geflasht (COM9), WLAN 192.168.1.241, SNTP synchron, WireGuard-Handshake 18
 
 HA neu gestartet: beide ESPs (Alde-ESP .202, Proxy .208) haben sich sofort durch den Tunnel verbunden, Integration `truma_levelcontrol` ist geladen (Einrichtungsdialog fragt nach Bluetooth-Adresse und Name). Protokoll-Konstanten laut `const.py`: Service `22bfa601-6afe-4cc5-b3ff-3e140baedeb6`, Measurement `…a610`, Password `…a619`, Store-NV `…a617`, Hersteller-ID 0x5000, Messwartezeit 3 s, Standard-Pollintervall 600 s. Offen: Proxy im Womo nahe am Gaskasten montieren, dann Discovery der zwei Sensoren abwarten oder MACs manuell eintragen.
 
+### Aus der Truma-Anleitung LevelControl (PDF vom 27.10.2026)
+
+- Verbinden mit iNet Box: Taste (5) kurz drücken, Status-LED (2) blinkt bis zu 2 Minuten (Sensor sichtbar), erlischt nach erfolgreichem Verbindungsaufbau. Bluetooth Klasse 2, Reichweite ca. 10 m, maximal zwei Sensoren pro iNet Box.
+- Nach jedem Flaschenwechsel Taste kurz drücken (neue Messung).
+- **Werksreset:** Taste 20 s halten bis LED kurz aufleuchtet, danach ist eine neue Verbindung nötig. Für den HA-Betrieb **nicht** erforderlich: die Integration nutzt das Passwort-Protokoll des Sensors, keine Bluetooth-Bindung.
+- Trennen von der iNet Box geschieht nur in der App-Geräteliste.
+- Batterien 2 × AAA Alkali, Wechsel nicht im Gaskasten.
+
+Stand 19:03: Proxy hat 81 Bluetooth-Geräte gesehen, keines mit Hersteller-ID 0x5000. Nächster Schritt: Taste an beiden Sensoren kurz drücken, dann erneut prüfen.
+
 ### Schritte
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
