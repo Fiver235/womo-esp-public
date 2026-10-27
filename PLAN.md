@@ -1,5 +1,8 @@
 # Plan: Eigener Ersatz für die Truma iNet Box (Alde 3020 HE + Aventa comfort)
 
+> **Stand 27.10.2026:** Track B2 funktioniert (siehe `docs/TRACK-B-INET-BUS.md` Abschnitt 7): der ESP32 ersetzt die iNet Box am Alde-Panel und steuert Soll, Heizung, Warmwasser, Elektro, Gas, Priorität, Klimaautomatik und sogar die Aventa-Beleuchtung. Fernzugriff per WireGuard-Tunnel vom ESP zur heimischen Fritzbox (`esphome/README.md`, Abschnitt Fernzugriff). Offen: Nachtmodus-Kodierung, Gasflaschen-Sensoren (LevelControl, siehe unten).
+
+
 Stand: 2026-10-16 · Rechercheergebnis + Umsetzungsplan
 
 ---

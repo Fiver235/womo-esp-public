@@ -36,6 +36,7 @@ logger:
 api:
   encryption:
     key: !secret api_encryption_key
+  reboot_timeout: 0s        # Heizungssteuerung: kein Neustart, wenn laengere Zeit kein Client verbunden ist
 
 ota:
   - platform: esphome
@@ -51,11 +52,35 @@ wifi:
     subnet: 255.255.255.0
     dns1: 192.168.1.1
   use_address: 192.168.1.240
+  reboot_timeout: 0s        # LIN-Steuerung laeuft auch ohne WLAN weiter
   ap:
     ssid: "Alde-iNetBox Fallback"
     password: !secret fallback_ap_password
 
 captive_portal:
+
+# ---------------------------------------------------------------------------
+# Fernzugriff: WireGuard-Tunnel vom ESP zur Fritzbox zu Hause (Peer "alde-inetbox").
+# Der Nighthawk M5 kann kein VPN, der ESP baut den Tunnel selbst von innen auf.
+# Home Assistant erreicht den ESP dann unter 192.168.100.202 (manuell hinzufuegen, Port 6053).
+# Nur Ziele im Heimnetz laufen durch den Tunnel (netmask), alles andere direkt.
+# ---------------------------------------------------------------------------
+time:
+  - platform: sntp          # Pflicht fuer WireGuard (Handshake braucht die Uhrzeit)
+    id: sntp_time
+
+wireguard:
+  address: 192.168.100.202
+  netmask: 255.255.255.0
+  private_key: !secret wg_private_key
+  peer_endpoint: example.dyndns.org
+  peer_port: 59004
+  peer_public_key: !secret wg_peer_public_key
+  peer_preshared_key: !secret wg_preshared_key
+  peer_allowed_ips:
+    - 192.168.100.0/24
+  peer_persistent_keepalive: 25s
+  reboot_timeout: 0s        # kein Neustart, wenn LTE/Tunnel weg ist
 
 external_components:
   - source:
@@ -81,6 +106,9 @@ binary_sensor:
   - platform: truma_inetbox
     name: "Alde Panel verbunden"
     type: CP_PLUS_CONNECTED
+  - platform: wireguard
+    status:
+      name: "WireGuard verbunden"
 
 # ---------------------------------------------------------------------------
 # Entitaeten ueber Template-Lambdas direkt auf die C++-Aktionen der Komponente.
@@ -88,6 +116,9 @@ binary_sensor:
 # ---------------------------------------------------------------------------
 
 sensor:
+  - platform: wireguard
+    latest_handshake:
+      name: "WireGuard letzter Handshake"
   - platform: template
     name: "Alde Innentemperatur"
     unit_of_measurement: "°C"

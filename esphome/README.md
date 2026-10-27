@@ -74,3 +74,13 @@ Phase 2 (steuern): JP3 verkabeln, im Alde-Panel **Settings → Installed Accesso
 - `alde3020` ist nur mit einer Alde 3020 (nicht HE) nachgewiesen; Checksummen-Modus wird automatisch erkannt. Bei „Jumping values" Polling-Intervall `SEND_INTERVAL_MS` in `alde3020.h` auf 2000 erhöhen (Fork nötig).
 - Der TIN-Setpoint (`TIN Setpoint`) ist bei aktiver Klimaanlage nicht der Sollwert (siehe Kommentar im Package).
 - Logger läuft auf `DEBUG`, damit die Transport-Frames (0x3C/0x3D) für Track B sichtbar sind. Nach Abschluss auf `INFO`.
+
+## Fernzugriff (WireGuard)
+
+Der Nighthawk M5 im Womo kann kein VPN und hat im LTE-Netz keine öffentliche Adresse. Der B2-Knoten baut deshalb selbst einen WireGuard-Tunnel zur Fritzbox zu Hause auf (`wireguard:` in `alde-inetbox-b2.yaml`, Peer „alde-inetbox" in der Fritzbox unter Internet → Freigaben → VPN (WireGuard)). Schlüssel in `secrets.yaml` (`wg_private_key`, `wg_peer_public_key`, `wg_preshared_key`), übernommen aus der von der Fritzbox erzeugten `.conf`.
+
+- Tunnel-Adresse des ESP: `192.168.100.202`, nur das Heimnetz `192.168.100.0/24` läuft durch den Tunnel.
+- `time: sntp` ist Pflicht (Handshake braucht die Uhrzeit); `reboot_timeout: 0s` bei `api`, `wifi` und `wireguard`, damit die Heizungssteuerung bei Verbindungsverlust nicht neu startet.
+- Home Assistant (zu Hause): ESPHome-Integration → Gerät **manuell** hinzufügen, Host `192.168.100.202`, Port 6053, Schlüssel `api_encryption_key`. Auto-Discovery funktioniert über VPN nicht.
+- Kontrolle: Entitäten „WireGuard verbunden" und „WireGuard letzter Handshake"; im Log `wireguard: Remote peer is online`.
+- Erster Test 27.10.2026 17:58: Handshake innerhalb von 5 s nach Boot, Peer online, keine LIN-Fehler.
