@@ -362,3 +362,31 @@ Nebenbefund Re-Init: Der komplette Init-Pfad von Fabians Komponente (0x0A → 0x
 Neue Deutung von Byte 1 im 0x51: Bit 0 = Aventa am Bus (ohne Aventa war Byte 1 = 0x02, mit Aventa 0x01/0x03), Bit 1 = Klimaautomatik. Byte 10 analog: Bit 1 = Beleuchtung, Bit 0 bisher immer gesetzt.
 
 Damit sind alle Felder des 0x50 außer 4–5, 11–14 funktional belegt. Offen bleibt nur der Nachtmodus (0x54).
+
+---
+
+## 8. Heizungswerte passiv aus den Panel↔Heizung-Frames (27.10.2026)
+
+An der iNet-Buchse sind nicht nur die Box-Abfragen (PID 0x18, 0x3C, 0x3D) sichtbar, sondern auch die Signal-Frames des festen Zeitrasters zwischen Panel und Heizung. Fabians Komponente speichert sie als `Heater_Alde_PID_xx`; die Dekodierung stammt von [Mellowgroup-dk/alde-3020he-lin](https://github.com/Mellowgroup-dk/alde-3020he-lin) (deren IDs tragen die LIN-Paritätsbits: 0x47→0x07, 0x5B→0x1B, 0xD3→0x13, 0xC4→0x04, 0x85→0x05, 0x97→0x17) und wurde gegen die Mitschnitte vom 27.10. geprüft.
+
+| PID | Byte | Wert | Umrechnung | Prüfung im Mitschnitt |
+|---|---|---|---|---|
+| 0x07 | 0–1 | Raumtemperatur (Panel-Sensor), **im Sekundentakt** | Dezikelvin: (raw−2730)/10 | `62 0B` = 18,4 °C, Stufen 18,4–18,7 |
+| 0x1B | 0–1 | Glykol-/Kesseltemperatur | Dezikelvin | 45 → 48 °C während Brennerlauf |
+| 0x1B | 2–3 | Netzstrom gesamt | (raw & 0x7FFF)/100 A, 0x7FFF = kein Landstrom | immer `FF 7F` (kein Landstrom) |
+| 0x1B | 6 | Brennerlüfter | raw × 32 U/min, 0 = Brenner aus | 0x40–0x63 = 2048–3168 U/min 14:57–15:00 |
+| 0x13 | 0–1 | Platinentemperatur | Dezikelvin | 39–43 °C |
+| 0x04 | 0–1 | Warmwasser-Soll | Dezikelvin; 0,0 aus / 50,0 normal / 65,0 Boost | passt zu Aktion 4 |
+| 0x06 | 0–1 | Erlaubte Elektroleistung | u16 W | 0 / 1000 / 2000 / 3000 bei Aktion 5 |
+| 0x15 | 0–1 | Tatsächliche Elektroleistung | u16 W | 0 (kein Landstrom) |
+| 0x05 | 0 | **Aktive Energiequelle** | 0x00 keine, 0x01 Gas, 0x02 Elektro | 12 Wechsel, alle deckungsgleich mit den Aktionszeiten (Mellowgroup nennt 02/04, hier anders) |
+| 0x17 | 0–1 | Klima-interner Sensor | Dezikelvin | 18,2–18,3 °C |
+| 0x17 | 2–3 | Klima-Zieltemperatur | Dezikelvin, 22,0 = Ruhe-Default | 22,0 / 18,0 |
+| 0x17 | 5 | Kompressor-Flag | 0x05 / 0x00 | nur 0x00 gesehen |
+| 0x17 | 6 | Aventa-Beleuchtung | % | 0x64 = 100 % beim Lichttest |
+| 0x08 | 0–1 | Spiegel von 0x17 Byte 2–3 | – | – |
+| 0x03 | 0–1 | Heizbefehl des Panels (= Soll, solange Klima ruht) | Dezikelvin | 18,0 / 19,0 |
+
+Nicht auf diesem Bus gesehen: Mellowgroups Frame 0xD6 (Wassertemperatur, Batteriespannung) und ein explizites Ventil- oder Fehlersignal. Hinweis auf Brennerbetrieb: Lüfter > 0 plus steigende Glykoltemperatur; zusammen mit „Energiequelle = Gas" eine brauchbare indirekte Gasausfall-Erkennung.
+
+Umsetzung: Getter `get_alde_pid_xx()` und `get_alde_heater_frame_age_ms()` in `TrumaiNetBoxApp`, Template-Sensoren in `esphome/alde-inetbox-b2.yaml` (Abschnitt „Heizungs-Frames"). Werte werden nur veröffentlicht, wenn der letzte Heizungsframe jünger als 30 s ist.

@@ -106,6 +106,18 @@ binary_sensor:
   - platform: truma_inetbox
     name: "Alde Panel verbunden"
     type: CP_PLUS_CONNECTED
+  - platform: template
+    name: "Alde Brenner laeuft"
+    device_class: heat
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      return id(truma).get_alde_pid_1B().burner_fan > 0;
+  - platform: template
+    name: "Aventa Kompressor"
+    device_class: running
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      return id(truma).get_alde_pid_17().compressor != 0;
   - platform: wireguard
     status:
       name: "WireGuard verbunden"
@@ -113,12 +125,138 @@ binary_sensor:
 # ---------------------------------------------------------------------------
 # Entitaeten ueber Template-Lambdas direkt auf die C++-Aktionen der Komponente.
 # Zustand kommt aus dem zuletzt empfangenen 0x51 (Status) bzw. 0x55 (Nacht).
+# Heizungswerte (Raum, Glykol, Luefter, ...) stammen aus den passiv mitgelesenen
+# Frames Panel <-> Heizung (PID 0x03..0x1B), Dekodierung siehe TrumaStructsAlde.h.
 # ---------------------------------------------------------------------------
 
 sensor:
   - platform: wireguard
     latest_handshake:
       name: "WireGuard letzter Handshake"
+
+  # ---- Heizungs-Frames (passiv, Sekundentakt am Bus) ----
+  - platform: template
+    name: "Alde Raumtemperatur (Panel)"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 5s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      uint16_t v = (uint16_t) id(truma).get_alde_pid_07().temp;
+      if (v == 0xFFFF || v == 0x7FFF || v == 0) return {};
+      return v / 10.0f - 273.0f;
+  - platform: template
+    name: "Alde Glykoltemperatur"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      uint16_t v = (uint16_t) id(truma).get_alde_pid_1B().temp;
+      if (v == 0xFFFF || v == 0x7FFF || v == 0) return {};
+      return v / 10.0f - 273.0f;
+  - platform: template
+    name: "Alde Brennerluefter"
+    unit_of_measurement: "U/min"
+    icon: mdi:fan
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      return id(truma).get_alde_pid_1B().burner_fan * 32.0f;
+  - platform: template
+    name: "Alde Netzstrom"
+    unit_of_measurement: "A"
+    device_class: current
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      uint16_t v = id(truma).get_alde_pid_1B().mains_current;
+      if (v == 0xFFFF || v == 0x7FFF) return {};   // 0x7FFF: kein Landstrom (gemessen)
+      return (v & 0x7FFF) / 100.0f;
+  - platform: template
+    name: "Alde Platinentemperatur"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      uint16_t v = (uint16_t) id(truma).get_alde_pid_13().temp;
+      if (v == 0xFFFF || v == 0x7FFF || v == 0) return {};
+      return v / 10.0f - 273.0f;
+  - platform: template
+    name: "Alde Warmwasser-Soll"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    icon: mdi:water-thermometer
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      uint16_t v = (uint16_t) id(truma).get_alde_pid_04().temp;
+      if (v == 0xFFFF || v == 0x7FFF || v == 0) return {};
+      return v / 10.0f - 273.0f;   // 0 = aus, 50 = normal, 65 = Boost
+  - platform: template
+    name: "Alde Elektroleistung erlaubt"
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      return (float) id(truma).get_alde_pid_06().permitted_power_w;
+  - platform: template
+    name: "Alde Elektroleistung aktiv"
+    unit_of_measurement: "W"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      return (float) id(truma).get_alde_pid_15().applied_power_w;
+  - platform: template
+    name: "Aventa Beleuchtung Helligkeit"
+    unit_of_measurement: "%"
+    icon: mdi:lightbulb-on
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      return (float) id(truma).get_alde_pid_17().light_level;
+  - platform: template
+    name: "Aventa Sensortemperatur"
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      uint16_t v = (uint16_t) id(truma).get_alde_pid_17().temp_sensor;
+      if (v == 0xFFFF || v == 0x7FFF || v == 0) return {};
+      return v / 10.0f - 273.0f;
+  - platform: template
+    name: "Alde letzter Heizungsframe"
+    unit_of_measurement: "s"
+    icon: mdi:timer-outline
+    accuracy_decimals: 0
+    update_interval: 10s
+    lambda: |-
+      uint32_t a = id(truma).get_alde_heater_frame_age_ms();
+      if (a == UINT32_MAX) return {};
+      return a / 1000.0f;
+
   - platform: template
     name: "Alde Innentemperatur"
     unit_of_measurement: "°C"
@@ -288,3 +426,16 @@ select:
           id(truma).get_alde_satus()->action_heater_prio(
               x == "Elektro" ? truma_inetbox::HeaterPriorityAlde::HEATER_PRIORITY_ALDE_ELECTRIC
                              : truma_inetbox::HeaterPriorityAlde::HEATER_PRIORITY_ALDE_GAS);
+text_sensor:
+  - platform: template
+    name: "Alde Energiequelle aktiv"
+    icon: mdi:fire-circle
+    update_interval: 10s
+    lambda: |-
+      if (id(truma).get_alde_heater_frame_age_ms() > 30000) return {};
+      switch (id(truma).get_alde_pid_05().energy_source) {
+        case 0x00: return std::string("keine");
+        case 0x01: return std::string("Gas");
+        case 0x02: return std::string("Elektro");
+        default: return std::string("unbekannt " + std::to_string(id(truma).get_alde_pid_05().energy_source));
+      }

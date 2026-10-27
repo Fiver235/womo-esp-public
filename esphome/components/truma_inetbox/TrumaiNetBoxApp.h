@@ -45,6 +45,22 @@ class TrumaiNetBoxApp : public LinBusProtocol {
 
   int64_t get_last_cp_plus_request() { return this->device_registered_; }
 
+  // Passiv mitgelesene Heizungs-Frames (Alde): Rohstrukturen fuer Template-Sensoren.
+  const Heater_Alde_PID_03 &get_alde_pid_03() const { return this->heater_alde_pid_03_; }
+  const Heater_Alde_PID_04 &get_alde_pid_04() const { return this->heater_alde_pid_04_; }
+  const Heater_Alde_PID_05 &get_alde_pid_05() const { return this->heater_alde_pid_05_; }
+  const Heater_Alde_PID_06 &get_alde_pid_06() const { return this->heater_alde_pid_06_; }
+  const Heater_Alde_PID_07 &get_alde_pid_07() const { return this->heater_alde_pid_07_; }
+  const Heater_Alde_PID_08 &get_alde_pid_08() const { return this->heater_alde_pid_08_; }
+  const Heater_Alde_PID_13 &get_alde_pid_13() const { return this->heater_alde_pid_13_; }
+  const Heater_Alde_PID_15 &get_alde_pid_15() const { return this->heater_alde_pid_15_; }
+  const Heater_Alde_PID_17 &get_alde_pid_17() const { return this->heater_alde_pid_17_; }
+  const Heater_Alde_PID_1B &get_alde_pid_1B() const { return this->heater_alde_pid_1B_; }
+  // Millisekunden seit dem letzten Heizungs-Frame; UINT32_MAX = noch keiner gesehen.
+  uint32_t get_alde_heater_frame_age_ms() const {
+    return this->heater_alde_last_frame_ms_ == 0 ? UINT32_MAX : (uint32_t) (millis() - this->heater_alde_last_frame_ms_);
+  }
+
   void debug(uint16_t val) {
     this->DEBUG_VALUE = val;
     this->DEBUG_SUBMIT = true;
@@ -92,6 +108,9 @@ class TrumaiNetBoxApp : public LinBusProtocol {
   Heater_Alde_PID_13 heater_alde_pid_13_ = {};
   Heater_Alde_PID_15 heater_alde_pid_15_ = {};
   Heater_Alde_PID_1B heater_alde_pid_1B_ = {};
+  Heater_Alde_PID_17 heater_alde_pid_17_ = {};
+  Heater_Alde_PID_08 heater_alde_pid_08_ = {};
+  volatile uint32_t heater_alde_last_frame_ms_ = 0;
 
   // last time CP plus was informed I got an update msg.
   uint32_t update_time_ = 0;

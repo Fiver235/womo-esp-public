@@ -86,4 +86,5 @@ Der Nighthawk M5 im Womo kann kein VPN und hat im LTE-Netz keine öffentliche Ad
 - Home Assistant (zu Hause): ESPHome-Integration → Gerät **manuell** hinzufügen, Host `192.168.100.202`, Port 6053, Schlüssel `api_encryption_key`. Auto-Discovery funktioniert über VPN nicht.
 - Kontrolle: Entitäten „WireGuard verbunden" und „WireGuard letzter Handshake"; im Log `wireguard: Remote peer is online`.
 - Erster Test 27.10.2026 17:58: Handshake innerhalb von 5 s nach Boot, Peer online, keine LIN-Fehler.
+- Heizungswerte (Raumtemperatur im Sekundentakt, Glykoltemperatur, Brennerlüfter, Netzstrom, Platinentemperatur, Warmwasser-Soll, Elektroleistung, Energiequelle, Aventa-Licht/Sensor/Kompressor) kommen passiv aus den Panel↔Heizung-Frames, siehe `docs/TRACK-B-INET-BUS.md` Abschnitt 8.
 - 27.10.2026 18:03: Gerät in Home Assistant angelegt (Integration „Alde iNet-Box", Entitäten `*.alde_inet_box_*`), Verbindung durch den Tunnel bestätigt.

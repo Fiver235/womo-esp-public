@@ -119,23 +119,28 @@ struct StatusFrameAldeHeaterDay {  // NOLINT(altera-struct-pack-align)
 } __attribute__((packed));
 
 // ALDE direct heater message structs
+//
+// Diese Frames laufen zwischen Panel (Master) und Heizung im festen Zeitraster und sind an der
+// iNet-Buchse passiv mitlesbar (Mitschnitt 27.10.2026, Dekodierung nach Mellowgroup-dk/alde-3020he-lin,
+// deren Frame-IDs mit Paritaet 0x47/0x5B/0xD3/0xC4/0x85/0x97 = PID 0x07/0x1B/0x13/0x04/0x05/0x17 sind).
+// Temperaturen: Dezikelvin, (raw - 2730) / 10 = Grad C; 0xFFFF / 0x7FFF = nicht verfuegbar.
 
 // ex: 5E.0B.00.FF.FF.FF.FF.FF
 // ex: 40.0B.00
 struct Heater_Alde_PID_03 {  // NOLINT(altera-struct-pack-align)
-  TargetTemp temp;           // 15-18°C
+  TargetTemp temp;           // Heizbefehl des Panels (= Soll, solange die Klimaanlage ruht)
   uint8_t unknown_02;       // 0x00
 } __attribute__((packed));
 
 // ex: AA.0A.FF.FF.FF.FF.FF.FF
 struct Heater_Alde_PID_04 {  // NOLINT(altera-struct-pack-align)
-  TargetTemp temp;           // 0°C
+  TargetTemp temp;           // Warmwasser-Soll: 0.0 aus, 50.0 normal, 65.0 Boost (verifiziert 27.10.2026)
 } __attribute__((packed));
 
 // ex: 01.08.90.FF.FF.FF.FF.FF
 // ex: 00.08.90
 struct Heater_Alde_PID_05 {  // NOLINT(altera-struct-pack-align)
-  uint8_t unknown_00;       // 0x01 - ? On or Off
+  uint8_t energy_source;    // aktive Energiequelle: 0x00 keine, 0x01 Gas, 0x02 Elektro (verifiziert 27.10.2026)
   uint8_t unknown_01;       // 0x08
   uint8_t unknown_02;       // 0x90
 } __attribute__((packed));
@@ -143,8 +148,7 @@ struct Heater_Alde_PID_05 {  // NOLINT(altera-struct-pack-align)
 // ex: 00.00.2F.F5.FF.FF.FF.FF
 // ex: 00.00.2F.F5
 struct Heater_Alde_PID_06 {  // NOLINT(altera-struct-pack-align)
-  uint8_t unknown_00;       // 0x00
-  uint8_t unknown_01;       // 0x00
+  uint16_t permitted_power_w;  // erlaubte Elektroleistung in W: 0 / 1000 / 2000 / 3000 (verifiziert 27.10.2026)
   uint16_t unknown_02;      // 0xF52F
 } __attribute__((packed));
 
@@ -154,7 +158,7 @@ struct Heater_Alde_PID_06 {  // NOLINT(altera-struct-pack-align)
 // ex: 56.0B.FF.FF.2B.00.20.44
 // ex: B8.0B.FF.FF.2B.00.20.44
 struct Heater_Alde_PID_07 {  // NOLINT(altera-struct-pack-align)
-  TargetTemp temp;           // 17.4-27-28.2°C
+  TargetTemp temp;           // Raumtemperatur, 0,1 Grad, im Sekundentakt (Panel-Sensor)
   uint16_t unknown_02;      // 0xFFFF
   uint8_t unknown_04;       // 0x2B
   uint8_t unknown_05;       // 0x00
@@ -168,7 +172,7 @@ struct Heater_Alde_PID_07 {  // NOLINT(altera-struct-pack-align)
 // ex: E4.0C.04.FF.FF.FF.FF.FF
 // ex: E0.0B.00
 struct Heater_Alde_PID_13 {  // NOLINT(altera-struct-pack-align)
-  TargetTemp temp;           // 30-31-56 - 58°C
+  TargetTemp temp;           // Platinentemperatur der Heizung (Mellowgroup: PCB temperature)
   uint8_t unknown_02;       // 0x04
 } __attribute__((packed));
 
@@ -176,8 +180,7 @@ struct Heater_Alde_PID_13 {  // NOLINT(altera-struct-pack-align)
 // ex: 00.00.2F.F5.0E.0B.FF.FF
 // ex: 00.00.2F.F5.C2.0B
 struct Heater_Alde_PID_15 {  // NOLINT(altera-struct-pack-align)
-  uint8_t unknown_00;       // 0x00
-  uint8_t unknown_01;       // 0x00
+  uint16_t applied_power_w;  // tatsaechliche Elektroleistung in W
   uint16_t unknown_02;      // 0xF52F
   TargetTemp temp;           // 9-10-28°C
 } __attribute__((packed));
@@ -187,11 +190,27 @@ struct Heater_Alde_PID_15 {  // NOLINT(altera-struct-pack-align)
 // ex: DA.0C.FF.7F.FF.7F.45.00
 // ex: D6.0B.FF.7F.FF.7F.00.00
 struct Heater_Alde_PID_1B {  // NOLINT(altera-struct-pack-align)
-  TargetTemp temp;           // 30-55-57°C
-  uint16_t unknown_02;      // 0x7FFF
+  TargetTemp temp;           // Glykol-/Kesseltemperatur
+  uint16_t mains_current;   // Netzstrom gesamt, (raw & 0x7FFF) / 100 A; 0x7FFF = kein Landstrom
   uint16_t unknown_04;      // 0x7FFF
-  uint8_t unknown_06;       // 0x6D x45
+  uint8_t burner_fan;       // Brennerluefter, raw * 32 U/min (0 = Brenner aus)
   uint8_t unknown_07;       // 0x00
+} __attribute__((packed));
+
+// Aventa-/Klima-Frame (Mellowgroup 0x97). ex: 4F.0B.86.0B.71.00.00.FF
+struct Heater_Alde_PID_17 {  // NOLINT(altera-struct-pack-align)
+  TargetTemp temp_sensor;    // klimainterner Sensor (welcher, unbekannt)
+  TargetTemp temp_target;    // Zieltemperatur, nur gueltig wenn Klima aktiv (sonst 22.0 Default)
+  uint8_t unknown_04;       // 0x71 / 0x73
+  uint8_t compressor;       // 0x05 Kompressor-Flag, 0x00 aus
+  uint8_t light_level;      // Aventa-Beleuchtung in % (0x64 = 100)
+  uint8_t unknown_07;       // 0xFF
+} __attribute__((packed));
+
+// Spiegel von PID_17 Byte 2-3 (Mellowgroup 0x08); Antwortrate zeigt, ob die Klimaanlage aktiv ist.
+struct Heater_Alde_PID_08 {  // NOLINT(altera-struct-pack-align)
+  TargetTemp temp_target;
+  uint8_t unknown_02[6];
 } __attribute__((packed));
 
 }  // namespace truma_inetbox

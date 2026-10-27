@@ -38,3 +38,5 @@ Grundlage: `docs/TRACK-B-INET-BUS.md` Abschnitt 6.
 | `TrumaiNetBoxApp.h/.cpp` | `alde_night_` registriert (Parent, update, reset, Sendepfad, 0x55-Handler, `has_update_to_submit_`) |
 
 Die ESPHome-Entitäten für B2 sind als Template-Lambdas in `../alde-inetbox-b2.yaml` angelegt (kein eigener Platform-Code nötig).
+
+| `TrumaStructsAlde.h`, `TrumaiNetBoxApp.h/.cpp` (27.10., Heizungswerte) | Felder der passiv mitgelesenen Frames benannt (Glykol, Lüfter, Netzstrom, Warmwasser-Soll, Elektroleistung, Energiequelle), neue Frames 0x17 (Aventa) und 0x08 gespeichert, Getter `get_alde_pid_xx()` und `get_alde_heater_frame_age_ms()`; Doku in `docs/TRACK-B-INET-BUS.md` Abschnitt 8 |

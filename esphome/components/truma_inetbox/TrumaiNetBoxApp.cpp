@@ -67,22 +67,24 @@ void TrumaiNetBoxApp::update() {
                temp_code_to_decimal(this->heater_alde_pid_04_.temp));
       ESP_LOGD(TAG, "x05: %s",
                format_hex_pretty((uint8_t *) &this->heater_alde_pid_05_, sizeof(Heater_Alde_PID_05)).c_str());
-      ESP_LOGD(TAG, "x06: %s - %u / %i",
+      ESP_LOGD(TAG, "x06: %s - %u W erlaubt",
                format_hex_pretty((uint8_t *) &this->heater_alde_pid_06_, sizeof(Heater_Alde_PID_06)).c_str(),
-               this->heater_alde_pid_06_.unknown_02, this->heater_alde_pid_06_.unknown_02);
+               this->heater_alde_pid_06_.permitted_power_w);
       ESP_LOGD(TAG, "x07: %s - %.1f°C",
                format_hex_pretty((uint8_t *) &this->heater_alde_pid_07_, sizeof(Heater_Alde_PID_07)).c_str(),
                temp_code_to_decimal(this->heater_alde_pid_07_.temp));
       ESP_LOGD(TAG, "x13: %s - %.1f°C",
                format_hex_pretty((uint8_t *) &this->heater_alde_pid_13_, sizeof(Heater_Alde_PID_13)).c_str(),
                temp_code_to_decimal(this->heater_alde_pid_13_.temp));
-      ESP_LOGD(TAG, "x15: %s - %u / %i %.1f°C",
+      ESP_LOGD(TAG, "x15: %s - %u W aktiv %.1f°C",
                format_hex_pretty((uint8_t *) &this->heater_alde_pid_15_, sizeof(Heater_Alde_PID_15)).c_str(),
-               this->heater_alde_pid_15_.unknown_02, this->heater_alde_pid_15_.unknown_02,
-               temp_code_to_decimal(this->heater_alde_pid_15_.temp));
-      ESP_LOGD(TAG, "x1B: %s - %.1f°C",
+               this->heater_alde_pid_15_.applied_power_w, temp_code_to_decimal(this->heater_alde_pid_15_.temp));
+      ESP_LOGD(TAG, "x1B: %s - Glykol %.1f°C Luefter %u U/min",
                format_hex_pretty((uint8_t *) &this->heater_alde_pid_1B_, sizeof(Heater_Alde_PID_1B)).c_str(),
-               temp_code_to_decimal(this->heater_alde_pid_1B_.temp));
+               temp_code_to_decimal(this->heater_alde_pid_1B_.temp), this->heater_alde_pid_1B_.burner_fan * 32);
+      ESP_LOGD(TAG, "x17: %s - Licht %u%%",
+               format_hex_pretty((uint8_t *) &this->heater_alde_pid_17_, sizeof(Heater_Alde_PID_17)).c_str(),
+               this->heater_alde_pid_17_.light_level);
     }
   }
 }
@@ -163,6 +165,10 @@ bool TrumaiNetBoxApp::answer_lin_order_(const uint8_t pid) {
 
 void TrumaiNetBoxApp::lin_message_slave_observed_non_queue_(const uint8_t pid, const uint8_t *message,
                                                             uint8_t length) {
+  // Zeitstempel fuer die passiv mitgelesenen Alde-Heizungsframes (PID 0x03..0x1B ohne 0x18).
+  if (pid >= 0x03 && pid <= 0x1B && pid != LIN_PID_TRUMA_INET_BOX) {
+    this->heater_alde_last_frame_ms_ = millis();
+  }
   // TRUMA Combi
   if (pid == 0x20 && length >= sizeof(Heater_Combi_PID_20)) {
     std::memcpy(&this->heater_combi_pid_20_, message, sizeof(Heater_Combi_PID_20));
@@ -190,6 +196,10 @@ void TrumaiNetBoxApp::lin_message_slave_observed_non_queue_(const uint8_t pid, c
       std::memcpy(&this->heater_alde_pid_15_, message, sizeof(Heater_Alde_PID_15));
     } else if (pid == 0x1B && length >= sizeof(Heater_Alde_PID_1B)) {
       std::memcpy(&this->heater_alde_pid_1B_, message, sizeof(Heater_Alde_PID_1B));
+    } else if (pid == 0x17 && length >= sizeof(Heater_Alde_PID_17)) {
+      std::memcpy(&this->heater_alde_pid_17_, message, sizeof(Heater_Alde_PID_17));
+    } else if (pid == 0x08 && length >= sizeof(Heater_Alde_PID_08)) {
+      std::memcpy(&this->heater_alde_pid_08_, message, sizeof(Heater_Alde_PID_08));
     }
 }
 
