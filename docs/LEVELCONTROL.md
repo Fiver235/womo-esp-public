@@ -78,7 +78,7 @@ In HA gibt es keine Einstellung dafür: Der Sensor liefert Prozent und Gramm fer
 
 ### Reverse Engineering der Sensorkonfiguration (27.10.2026, 20:15)
 
-Werkzeug: `tools/levelcontrol_dump.py` (liest alle Characteristics über den Proxy per aioesphomeapi; `--write` für Schreibtests). Zwei Erkenntnisse zum Zugriff über den ESPHome-Proxy: Verbindungsaufträge nimmt der Proxy nur von der API-Verbindung an, die gerade Advertisements abonniert hat (Abo während des Zugriffs halten), und vor dem Verbinden auf ein Advertisement des Sensors warten.
+Werkzeug: `tools/levelcontrol_dump.py` (liest alle Characteristics über den Proxy per aioesphomeapi; `--write` für Schreibtests). **Nebenwirkung:** Der ESPHome-Proxy liefert Advertisements und nimmt Verbindungsaufträge nur für die zuletzt abonnierte API-Verbindung an. Solange das Werkzeug läuft und danach, bis HA sich neu verbindet, bekommt HA keine Advertisements mehr („sensor not advertising right now", Polls scheitern still). **Nach jedem Einsatz des Werkzeugs den ESPHome-Eintrag „Womo BLE-Proxy" in HA neu laden** (`homeassistant.reload_config_entry`), am 27.10. kostete das zwei Stunden ohne Messwerte. Zwei Erkenntnisse zum Zugriff über den ESPHome-Proxy: Verbindungsaufträge nimmt der Proxy nur von der API-Verbindung an, die gerade Advertisements abonniert hat (Abo während des Zugriffs halten), und vor dem Verbinden auf ein Advertisement des Sensors warten.
 
 **Protokoll-Details (beide Sensoren, Modell „TRUMA I1", Hardware 1.0):**
 

@@ -3,6 +3,8 @@
 
 Nur LESEN. Zweck: Flaschentyp-Konfiguration finden (Vergleich zweier Sensoren).
 Verbindet sich direkt per aioesphomeapi mit dem Proxy (womo-ble-proxy), nicht ueber Home Assistant.
+ACHTUNG: Der Proxy bedient nur die zuletzt abonnierte API-Verbindung. Danach in Home Assistant den
+ESPHome-Eintrag "Womo BLE-Proxy" neu laden, sonst bekommt HA keine Advertisements mehr.
 
 Aufruf (Projekt-Venv, Notebook im Womo-WLAN oder Tunnel):
     python tools/levelcontrol_dump.py 90:7B:C6:43:20:B0 00:81:F9:6F:B2:DE [--proxy 192.168.1.241] [--json out.json]
