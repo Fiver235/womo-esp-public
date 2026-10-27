@@ -61,7 +61,7 @@ Nach kurzem Tastendruck an beiden Sensoren erschienen sie in der Bluetooth-Histo
 **Keine automatische Erkennung:** Die Integration wartet auf Hersteller-ID 0x5000 (20480); diese Sensoren senden andere IDs (vermutlich variabler Inhalt statt fester Firmen-ID). Deshalb manuell über die Adresse anlegen. Das Anlegen per MCP-Werkzeug lief in den 30-s-Timeout und brach die laufende Einrichtung ab (`setup_error`); ein `homeassistant.reload_config_entry` je Eintrag hat das behoben.
 
 - **Links:** erste Messung 19:24 erfolgreich: Batterie 100 %, Temperatur 22 °C, aber Füllstand 0 %, Gasmenge 0,0 kg, Messqualität 0 → Entschlüsselung stimmt, Messung selbst ohne akustische Kopplung (prüfen: sitzt der Sensor unter der Flasche?).
-- **Rechts:** sechs Verbindungsversuche in Folge fehlgeschlagen („sensor not reachable this cycle") trotz RSSI −51 dB; Entitäten `unavailable`. Vermutung: Verbindung nur im Zwei-Minuten-Fenster nach Tastendruck oder bei einem der seltenen Advertisements möglich; der ESP32-Connect läuft vorher in den Timeout. Nächster Test: Taste drücken und sofort „Messung auslösen".
+- **Rechts:** über 20 Verbindungsversuche fehlgeschlagen, auch direkt nach erneutem Tastendruck (19:48). Mit Debug-Logging (`logger.set_level` für `custom_components.truma_levelcontrol`, `bleak_esphome`, `bleak_retry_connector`): erst „Timeout waiting for connect response after 20 s", später sofort `ESP_GATT_ERROR` (Code 133) beim Verbindungsaufbau, bei RSSI −63 bis −71 dB. Der Sensor wird gesehen, nimmt aber keine Verbindung an. Verdacht: belegt durch eine andere Zentrale (Handy mit Truma-App) oder Verbindung nur in einem bestimmten Zustand möglich. Links funktioniert mit identischem Weg, der Proxy ist also nicht die Ursache.
 
 ### Schritte
 
