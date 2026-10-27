@@ -249,3 +249,5 @@ Konkrete Amazon-Bestellliste für B1/B2 mit Links und Preisen: [docs/BESTELLLIST
 - Smart-Control-Einbau an „External panel": https://www.practicalmotorhome.com/advice/how-to-fit-smart-control-for-aldes-3020-heating
 - HA-Community-Thread Truma/Alde: https://community.home-assistant.io/t/truma-alde-motorhome-rv-integration/178409
 - TJA1020 am ESP32: https://www.mikrocontroller.net/topic/583322
+
+- **LevelControl-Gassensoren (27.10.2026):** weiterverwendbar über die HA-Integration von cyclemat plus zweiten ESP32 als Bluetooth-Proxy mit WireGuard, siehe [docs/LEVELCONTROL.md](docs/LEVELCONTROL.md). Config `esphome/womo-ble-proxy.yaml` kompiliert, noch nicht geflasht.

@@ -3,3 +3,4 @@ esphome/.esphome/
 .venv/
 logs/
 .claude/settings.local.json
+*.conf

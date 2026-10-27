@@ -1,0 +1,101 @@
+# ===========================================================================
+# Zweiter ESP32: Bluetooth-Proxy fuer die Truma LevelControl-Gassensoren
+#
+# - esp32_ble_tracker + bluetooth_proxy (active: true): Home Assistant zu Hause
+#   baut ueber diesen ESP die aktive BLE-Verbindung zu den LevelControl-Sensoren
+#   auf (Integration: cyclemat/HAOS-Truma-Levelcontrol-Integration, HACS).
+# - wireguard: eigener Peer in der Fritzbox (NICHT derselbe wie der Alde-ESP),
+#   Tunnel-Adresse 192.168.100.208. HA erreicht den ESP unter dieser Adresse
+#   (ESPHome-Integration -> manuell hinzufuegen, Port 6053, proxy_api_encryption_key).
+# - Platzierung: nahe am Gaskasten, im WLAN des Nighthawk M5 (DHCP).
+#
+# Flashen (erstes Mal per USB, danach OTA):
+#   .\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx
+# ===========================================================================
+
+substitutions:
+  name: womo-ble-proxy
+  friendly_name: "Womo BLE-Proxy"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: DEBUG
+  baud_rate: 115200
+
+api:
+  encryption:
+    key: !secret proxy_api_encryption_key
+  reboot_timeout: 0s        # HA ist nur ueber den Tunnel da; kein Neustart bei Verbindungsverlust
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret proxy_api_encryption_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 0s
+  ap:
+    ssid: "Womo-BLE-Proxy Fallback"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+time:
+  - platform: sntp          # Pflicht fuer WireGuard (Handshake braucht die Uhrzeit)
+    id: sntp_time
+
+wireguard:
+  address: 192.168.100.208  # Address aus der Fritzbox-.conf dieses Peers
+  netmask: 255.255.255.0
+  private_key: !secret proxy_wg_private_key
+  peer_endpoint: example.dyndns.org
+  peer_port: 59004
+  peer_public_key: !secret proxy_wg_peer_public_key
+  peer_preshared_key: !secret proxy_wg_preshared_key
+  peer_allowed_ips:
+    - 192.168.100.0/24      # nur das Heimnetz durch den Tunnel, nicht 0.0.0.0/0 aus der .conf
+  peer_persistent_keepalive: 25s
+  reboot_timeout: 0s
+
+# Bluetooth-Proxy. active: true ist noetig, weil die LevelControl-Integration
+# eine GATT-Verbindung aufbaut (Messung anstossen, verschluesselte Antwort lesen).
+esp32_ble_tracker:
+  scan_parameters:
+    active: true
+
+bluetooth_proxy:
+  active: true
+
+binary_sensor:
+  - platform: wireguard
+    status:
+      name: "WireGuard verbunden"
+  - platform: status
+    name: "Proxy Status"
+
+sensor:
+  - platform: wireguard
+    latest_handshake:
+      name: "WireGuard letzter Handshake"
+  - platform: wifi_signal
+    name: "WLAN Signal"
+    update_interval: 60s
+
+text_sensor:
+  - platform: wireguard
+    address:
+      name: "WireGuard Adresse"
+
+button:
+  - platform: restart
+    name: "Proxy Neustart"

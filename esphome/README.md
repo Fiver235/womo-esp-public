@@ -11,6 +11,7 @@ Ersatz für die Truma iNet Box: liest den TIN-Bus passiv mit (LIN-A) und steuert
 | `packages/jp3_control.yaml` | LIN-B: LIN-Master an JP3, Steuerung der Alde (Basis: holdestmade/esphome-alde-3020, MIT) |
 | `alde-inetbus-observer.yaml` | **Track B1:** separater Node zum Mitschneiden des TIN-Bus **mit** echter iNet Box (Fabian Schmidt `@alde`, `observer_mode: true`, sendet nichts). Messprotokoll in [../docs/TRACK-B-INET-BUS.md](../docs/TRACK-B-INET-BUS.md) |
 | `alde-inetbox-b2.yaml` | **Track B2:** iNet-Box-Emulation, **sendet** Befehle (0x50/0x54) an das Alde-Panel. Nur mit abgezogener echter iNet Box! Ersetzt den Observer auf demselben ESP32 |
+| `womo-ble-proxy.yaml` | **Zweiter ESP32:** Bluetooth-Proxy für die Truma LevelControl-Gassensoren mit eigenem WireGuard-Peer (192.168.100.208). Einrichtung: [../docs/LEVELCONTROL.md](../docs/LEVELCONTROL.md) |
 | `secrets.yaml.example` | Vorlage für `secrets.yaml` (nicht einchecken) |
 | `../tools/esphome_control.py` | Entitäten des Knotens ohne Home Assistant per nativer API schalten (`list`, `number`, `switch`, `select`), Key aus `secrets.yaml` |
 | `../tools/parse_observer_log.py` | Auswertung der Observer-Logs: Nachrichten tabellieren, dekodieren, ACKs zuordnen, Diffs zwischen Aktionen |
