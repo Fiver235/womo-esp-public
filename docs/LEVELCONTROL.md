@@ -117,6 +117,10 @@ a61a: 83 72 61 52 43 35 28 1c 10 05
 Befehl: python tools/levelcontrol_dump.py <MAC> --proxy 192.168.100.208 --write-encrypt   --write a613:046e001c0000 --write a614:23002f003b00470053009a00c100e90010018601   --write a615:4f008700ca001301610143034e04590564067f09 --write a616:cfbba7917b644c341a00   --write a61a:837261524335281c1005 --write "!a617:01"
 ```
 
+**Weitere Felder (Dienst `22bfa701`, 22:20):** `a715` (16 B) liegt ebenfalls im RC4-Strom (Offset nach den `22bfa601`-Reads, also fortlaufend über Dienstgrenzen) und ist auf beiden Sensoren `ff 00 … 00`, also kein Unterschied. `a710` Byte 2 ist ein laufender Wert (links 159, rechts 61 → 18 bei späterem Lesen), kein Konfigurationsparameter; Rest identisch (`be 17 64 … 03`). `a714` ist nur schreibbar. Damit sind alle lesbaren Felder beider Sensoren gleich.
+
+**Messverhalten auf der Tischplatte (22:15):** links misst mit Koppelkissen nach unten 44 % / Qualität 3 (Echo aus der Tischplatte), mit Kissen nach oben 0 % / Qualität 0 → echte Messung. Rechts liefert in derselben Lage 0 % / Qualität 0. Da die lesbare Konfiguration identisch ist, bleiben als Ursachen: Koppelkissen/Auflage (Kissen muss sauber und plan aufliegen), Firmware-Unterschied (1.0.7 vs 1.1.1) oder ein nicht lesbarer Parameter (`a714`). Test: beide Sensoren an exakt derselben Stelle vergleichen.
+
 **Der Werksreset hat die Flaschenkonfiguration (a613–a616, a61a) und den Namen gelöscht.** Die Tabellen sind die vom Flaschentyp abhängige Kalibrierung, die die App über die iNet Box geschrieben hat. Wiederherstellung rechts: entweder die Werte vom linken Sensor kopieren (nur bei gleichem Flaschentyp!) oder Tabellen für den gewünschten Typ ermitteln.
 
 ### Schritte
