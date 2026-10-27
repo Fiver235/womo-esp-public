@@ -49,6 +49,20 @@ HA neu gestartet: beide ESPs (Alde-ESP .202, Proxy .208) haben sich sofort durch
 
 Stand 19:03: Proxy hat 81 Bluetooth-Geräte gesehen, keines mit Hersteller-ID 0x5000. Nächster Schritt: Taste an beiden Sensoren kurz drücken, dann erneut prüfen.
 
+### Stand 27.10.2026, 19:27 – Sensoren gefunden und angelegt
+
+Nach kurzem Tastendruck an beiden Sensoren erschienen sie in der Bluetooth-Historie des Proxys (RSSI −55/−56 dB), mit den in der Truma-App vergebenen Namen:
+
+| Sensor | Bluetooth-Adresse | Advertisement | HA-Eintrag |
+|---|---|---|---|
+| „T…Links" | `90:7B:C6:43:20:B0` | Hersteller-ID 0x0801, Services 0x0A00/0x1800 | „Gasflasche links" |
+| „T…rechts-11kg" | `00:81:F9:6F:B2:DE` | Hersteller-ID 0x2101, Services 0x0A00/0x1800 | „Gasflasche rechts" |
+
+**Keine automatische Erkennung:** Die Integration wartet auf Hersteller-ID 0x5000 (20480); diese Sensoren senden andere IDs (vermutlich variabler Inhalt statt fester Firmen-ID). Deshalb manuell über die Adresse anlegen. Das Anlegen per MCP-Werkzeug lief in den 30-s-Timeout und brach die laufende Einrichtung ab (`setup_error`); ein `homeassistant.reload_config_entry` je Eintrag hat das behoben.
+
+- **Links:** erste Messung 19:24 erfolgreich: Batterie 100 %, Temperatur 22 °C, aber Füllstand 0 %, Gasmenge 0,0 kg, Messqualität 0 → Entschlüsselung stimmt, Messung selbst ohne akustische Kopplung (prüfen: sitzt der Sensor unter der Flasche?).
+- **Rechts:** sechs Verbindungsversuche in Folge fehlgeschlagen („sensor not reachable this cycle") trotz RSSI −51 dB; Entitäten `unavailable`. Vermutung: Verbindung nur im Zwei-Minuten-Fenster nach Tastendruck oder bei einem der seltenen Advertisements möglich; der ESP32-Connect läuft vorher in den Timeout. Nächster Test: Taste drücken und sofort „Messung auslösen".
+
 ### Schritte
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
