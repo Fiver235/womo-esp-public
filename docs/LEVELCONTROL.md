@@ -76,6 +76,36 @@ GATT-Profil des LevelControl (aus dem Service-Discovery, nützlich für eine sp�
 
 In HA gibt es keine Einstellung dafür: Der Sensor liefert Prozent und Gramm fertig berechnet, der Flaschentyp wurde von der Truma-App über die iNet Box in den Sensor geschrieben (beschreibbare Characteristics `22bfa611`–`a617`/`a61a`, Kodierung unbekannt). **Offen:** ob der Werksreset am rechten Sensor diese Konfiguration gelöscht hat (der Name blieb erhalten). Prüfung: beide Sensoren nacheinander unter dieselbe Flasche, Messung auslösen, Werte vergleichen. Bei Abweichung entweder über die iNet Box (nur 12 V, ohne TIN-Bus, App-Verbindung) neu konfigurieren oder die Characteristic per Vergleich links/rechts selbst ermitteln.
 
+### Reverse Engineering der Sensorkonfiguration (27.10.2026, 20:15)
+
+Werkzeug: `tools/levelcontrol_dump.py` (liest alle Characteristics über den Proxy per aioesphomeapi; `--write` für Schreibtests). Zwei Erkenntnisse zum Zugriff über den ESPHome-Proxy: Verbindungsaufträge nimmt der Proxy nur von der API-Verbindung an, die gerade Advertisements abonniert hat (Abo während des Zugriffs halten), und vor dem Verbinden auf ein Advertisement des Sensors warten.
+
+**Protokoll-Details (beide Sensoren, Modell „TRUMA I1", Hardware 1.0):**
+
+- Passwort (`a619`, 5 Byte) ist eine feste Umsortierung der MAC-Bytes [4],[1],[3],[5],[2] (90:7B:C6:43:20:B0 → `20 7b 43 b0 c6`). RC4-Schlüssel = Passwort XOR `TRUMA`.
+- **Der RC4-Keystream läuft innerhalb einer Verbindung über alle Lesezugriffe der Characteristics des Dienstes `22bfa601` fort** (`a610`, `a611`…`a616`, `a61a`); `a617` (Trigger) ist Klartext und zählt nicht mit. Die HA-Integration liest pro Verbindung nur `a610` und sieht deshalb immer den Stromanfang.
+- Firmware links 1.1.1.0 (002), rechts 1.0.7.0 (002); Seriennummern 0000000035121011 / 0000000030102002. Dienst `f000ffd0` = TI-OAD-Firmware-Update (TI CC26xx).
+
+**Entschlüsselter Inhalt (links = konfiguriert, rechts = nach Werksreset):**
+
+| Char | Bytes | links | rechts (Reset) | Deutung |
+|---|---|---|---|---|
+| `a610` | 8 | `00 00 00 64 17 00 00 00` | gleich | Messung: % / g·100 (LE) / Batterie / Temp / – / Qualität |
+| `a611` | 16 | `0000000035121011` | `0000000030102002` | Seriennummer (ASCII) |
+| `a612` | 12 | `Links` + Nullen | `000030102002` | **Name**, nach Reset Standard aus Seriennummer |
+| `a613` | 6 | `04 6e 00 1c 00 00` | `00 0a 00 00 00 00` | Kopf: Flaschentyp-ID? / Parameter |
+| `a614` | 20 | u16×10: 35 47 59 71 83 154 193 233 272 390 | Nullen | Tabelle 1 (steigend; Füllhöhe?) |
+| `a615` | 20 | u16×10: 79 135 202 275 353 835 1102 1369 1636 2431 | Nullen | Tabelle 2 (steigend; Masse/Volumen?) |
+| `a616` | 10 | u8×10: 207 187 167 145 123 100 76 52 26 0 | Nullen | Tabelle 3 (fallend) |
+| `a61a` | 10 | u8×10: 131 114 97 82 67 53 40 28 16 5 | Nullen | Tabelle 4 (fallend) |
+| `a617` | 1 | `00` | `00` | Trigger (Klartext, Schreiben 0x03 dann 0x02) |
+| `a710` | 16 | `00 00 9f 00 … be 17 64 00 00 00 03 00` | `00 00 3d …` | Klartext, Byte 2 variiert (Zähler?) |
+| `a711` | 4 | `20 bf 02 00` | gleich | Klartext |
+
+**Schreiben (bestätigt 20:25 am rechten Sensor):** Klartext-Writes auf `a612` quittiert der Sensor mit GATT-Fehler 0x80 (Application error). Akzeptiert wird der Wert **RC4-verschlüsselt mit frischem Keystream** (eigener Strom für Writes, beginnt pro Verbindung bei 0; Lesezugriffe vorher zählen nicht mit – zumindest wenn nur das Passwort gelesen wurde). Die Änderung ist erst nach **Kommando `0x01` auf `a617`** (Klartext) dauerhaft; ohne das Kommando stand beim Zurücklesen der alte Wert. `a617` ist also ein Kommandoregister: 0x01 = Konfiguration speichern (Store NV), 0x03/0x02 = Messung anstoßen (so nutzt es die HA-Integration). Beispiel: `python tools/levelcontrol_dump.py 00:81:F9:6F:B2:DE --proxy 192.168.100.208 --write a612:7265636874732d31316b6700 --write "!a617:01" --write-encrypt`. Nebeneffekt: `a610` zeigte danach Qualität 3 und 5 % – das Kommando löst offenbar auch eine Messung aus.
+
+**Der Werksreset hat die Flaschenkonfiguration (a613–a616, a61a) und den Namen gelöscht.** Die Tabellen sind die vom Flaschentyp abhängige Kalibrierung, die die App über die iNet Box geschrieben hat. Wiederherstellung rechts: entweder die Werte vom linken Sensor kopieren (nur bei gleichem Flaschentyp!) oder Tabellen für den gewünschten Typ ermitteln.
+
 ### Schritte
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.

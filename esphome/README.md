@@ -13,6 +13,7 @@ Ersatz für die Truma iNet Box: liest den TIN-Bus passiv mit (LIN-A) und steuert
 | `alde-inetbox-b2.yaml` | **Track B2:** iNet-Box-Emulation, **sendet** Befehle (0x50/0x54) an das Alde-Panel. Nur mit abgezogener echter iNet Box! Ersetzt den Observer auf demselben ESP32 |
 | `womo-ble-proxy.yaml` | **Zweiter ESP32:** Bluetooth-Proxy für die Truma LevelControl-Gassensoren mit eigenem WireGuard-Peer (192.168.100.208). Einrichtung: [../docs/LEVELCONTROL.md](../docs/LEVELCONTROL.md) |
 | `secrets.yaml.example` | Vorlage für `secrets.yaml` (nicht einchecken) |
+| `../tools/levelcontrol_dump.py` | Truma LevelControl über den BLE-Proxy komplett auslesen (RC4-Entschlüsselung) und gezielt beschreiben; Protokoll in [../docs/LEVELCONTROL.md](../docs/LEVELCONTROL.md) |
 | `../tools/esphome_control.py` | Entitäten des Knotens ohne Home Assistant per nativer API schalten (`list`, `number`, `switch`, `select`), Key aus `secrets.yaml` |
 | `../tools/parse_observer_log.py` | Auswertung der Observer-Logs: Nachrichten tabellieren, dekodieren, ACKs zuordnen, Diffs zwischen Aktionen |
 
