@@ -35,6 +35,10 @@ Home Assistant baut die Verbindung zu ESPHome-Geräten selbst auf; hinter dem Ni
 
 Proxy geflasht (COM9), WLAN 192.168.1.241, SNTP synchron, WireGuard-Handshake 18:46:16, Peer online. Vom Heimnetz aus ist Port 6053 auf 192.168.100.208 erreichbar (Ping antwortet der ESP durch den Tunnel nicht, das ist normal). In HA ist bisher nur der Alde-ESP eingetragen, HACS vorhanden, LevelControl-Repository noch nicht hinzugefügt.
 
+### Stand 27.10.2026, 18:55
+
+HA neu gestartet: beide ESPs (Alde-ESP .202, Proxy .208) haben sich sofort durch den Tunnel verbunden, Integration `truma_levelcontrol` ist geladen (Einrichtungsdialog fragt nach Bluetooth-Adresse und Name). Protokoll-Konstanten laut `const.py`: Service `22bfa601-6afe-4cc5-b3ff-3e140baedeb6`, Measurement `…a610`, Password `…a619`, Store-NV `…a617`, Hersteller-ID 0x5000, Messwartezeit 3 s, Standard-Pollintervall 600 s. Offen: Proxy im Womo nahe am Gaskasten montieren, dann Discovery der zwei Sensoren abwarten oder MACs manuell eintragen.
+
 ### Schritte
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
