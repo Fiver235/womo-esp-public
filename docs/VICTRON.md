@@ -50,6 +50,28 @@ Ergebnis 31.10. 11:29 UTC: Handshake sofort, Cerbo pingt .250 und HA durch den T
 
 Die vormittags eingerichtete FRITZ!Box-Route 100.64.0.0/10 → .250 und die Headscale-ACL-Regel für `ha` werden für den Cerbo nicht mehr gebraucht (Rückbau offen, schaden nicht). Historie der Headscale-Variante siehe unten.
 
+## Dashboard „Energie" (31.10.2026)
+
+Zweite Ansicht im HA-Dashboard „Wohnmobil" (`/womo-dashboard/energie`), angelehnt an die Übersichtsseite der Victron-Konsole GUI v2.
+
+- **Oben:** eigene Karte `custom:womo-energy-card` (Quelle `homeassistant/www/womo-energy-card.js`, in HA unter `/config/www/`, Ressource `/local/womo-energy-card.js?v=<Version>`). Links Landstrom, Lichtmaschine (Orion XS), Solar; Mitte MultiPlus und Batterie; rechts AC- und DC-Verbraucher. Linien mit laufenden Punkten ab 5 W in Flussrichtung; inaktive Quellen ausgegraut; Batteriefüllung grün/orange/rot nach Ladezustand. Klick auf einen Kasten öffnet die Detailansicht, „Modus" öffnet die Umschaltung des MultiPlus. Unter 640 px Kartenbreite Hochformat-Layout.
+- **Darunter:** native Kacheln für Batterie, MultiPlus (Modus umschaltbar), Solar und Orion XS (Schalter, Ladestromlimit) sowie ein 24-h-Verlauf der Leistungen und des Ladezustands.
+- Anzeigeeinheit der BMV-Sensoren „Time since last full charge" und „Restlaufzeit" auf Stunden gestellt (nur Darstellung); die Karte rechnet Dauer-Sensoren einheitenunabhängig um.
+
+Karten-Optionen: `threshold` (W, Standard 5), `layout` (`auto`/`landscape`/`portrait`), `title`, `names` (Überschriften je Kasten), `entities` mit den Schlüsseln
+
+| Kasten | Schlüssel |
+|---|---|
+| Landstrom | `shore_power`, `shore_voltage`, `shore_current`, `shore_frequency`, `shore_active` |
+| Wechselrichter/Lader | `inverter_state`, `inverter_mode`, `inverter_limit`, `inverter_dc_power` (+ = lädt Batterie), `inverter_temp` |
+| AC-Verbraucher | `ac_power`, `ac_voltage`, `ac_current`, `ac_frequency` |
+| Batterie | `battery_soc`, `battery_power` (+ = laden), `battery_voltage`, `battery_current`, `battery_ttg`, `battery_consumed` |
+| Solar | `solar_power`, `solar_voltage`, `solar_current`, `solar_today`, `solar_state` |
+| Lichtmaschine | `dcdc_power`, `dcdc_current`, `dcdc_input_voltage`, `dcdc_state` |
+| DC-Verbraucher | `dc_power` |
+
+Bei Änderungen an der Karte: Datei nach `/config/www/` kopieren und `?v=` in der Ressource erhöhen, sonst laden Browser die alte Fassung.
+
 ### Historie: Variante Headscale (verworfen für den Cerbo)
 
 #### Datenweg (ursprünglich: statische Route, ohne NAT)
