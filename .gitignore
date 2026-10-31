@@ -4,3 +4,4 @@ esphome/.esphome/
 logs/
 .claude/settings.local.json
 *.conf
+secrets/

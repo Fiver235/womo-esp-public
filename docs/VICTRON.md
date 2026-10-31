@@ -15,7 +15,32 @@ Stand 31.10.2026. Ziel: Cerbo GX, Orion XS und MPPT aus dem Womo in das heimisch
 
 Venus OS hat **kein** eingebautes Tailscale (Victron hat die native Umsetzung zurückgestellt). Community-Paket: [kwindrem/TailscaleGX](https://github.com/kwindrem/TailscaleGX) über den Package Manager; unterstützt Auth-Key und alternativen Login-Server (Headscale, „nicht garantiert").
 
-## Datenweg (Entscheidung 31.10.2026: statische Route, **ohne NAT**)
+## Datenweg – Entscheidung 31.10.2026 (nachmittags): **WireGuard direkt auf dem Cerbo**
+
+Der Plan mit Headscale/TailscaleGX scheiterte am Speicher: Der Cerbo GX (Venus OS v3.56, armv7, 512-MB-NAND) hat eine **/data-Partition von nur 29 MB** (3,7 MB belegt, fast nur Logs). TailscaleGX ist 36 MB groß, Aufräumen hilft nicht; 45 MB UBI sind zwar unverteilt, ein `ubirsvol` am laufenden Gerät wurde als zu riskant verworfen.
+
+Stattdessen ist der Cerbo jetzt **WireGuard-Peer der FRITZ!Box**, wie die ESPs, mit Heimnetz-Adresse **192.168.100.209**:
+
+```
+HA 192.168.100.15 ──LAN──► FRITZ!Box .254 ──WireGuard──► Cerbo wg0 192.168.100.209  (:8883 MQTT on LAN SSL)
+```
+
+| Baustein | Umsetzung |
+|---|---|
+| Kernel-Modul | `wireguard` ist Teil von Venus OS (5.10.109-venus-17), lädt per `modprobe` |
+| `wg`-Tool | nicht im Victron-Feed; `usr/bin/wg` aus Debian bullseye `wireguard-tools_1.0.20210223-1_armhf.deb` (glibc 2.31 = Venus dunfell), 47 KB, SHA256 geprüft, liegt in `/data/wireguard/wg` – Script `tools/cerbo/install_wg.sh` |
+| Konfiguration | `/data/wireguard/wg0.conf` (Mode 600) aus dem FRITZ!Box-Export, **AllowedIPs = 192.168.100.0/24** (Internet/VRM weiter über den M5); lokale Kopie `secrets/` (gitignored) |
+| Aufbau | `/data/wireguard/wg-up.sh` (`tools/cerbo/wg-up.sh`): `ip link add wg0 type wireguard`, `wg setconf`, Adresse, Route; wartet bis 30 min auf Netz/DNS, Log `/data/wireguard/wg-up.log` |
+| Autostart | `/data/rc.local` startet `wg-up.sh` im Hintergrund; /data und rc.local überleben Firmware-Updates |
+| Werkzeug | `tools/cerbo_ssh.py` (paramiko, Passwort aus `CERBO_PW`, `@script` per stdin, `put:` per SFTP) |
+
+Ergebnis 31.10. 11:29 UTC: Handshake sofort, Cerbo pingt .250 und HA durch den Tunnel.
+
+Die vormittags eingerichtete FRITZ!Box-Route 100.64.0.0/10 → .250 und die Headscale-ACL-Regel für `ha` werden für den Cerbo nicht mehr gebraucht (Rückbau offen, schaden nicht). Historie der Headscale-Variante siehe unten.
+
+### Historie: Variante Headscale (verworfen für den Cerbo)
+
+#### Datenweg (ursprünglich: statische Route, ohne NAT)
 
 ```
 HA 192.168.100.15 ──► FRITZ!Box .254 ──(statische Route 100.64.0.0/10 → .250)──► .250 ──(tailscale0)──► Cerbo 100.64.0.x :8883
