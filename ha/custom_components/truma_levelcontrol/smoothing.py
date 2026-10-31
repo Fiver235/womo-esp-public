@@ -57,6 +57,7 @@ class FilterState:
     candidate_count: int = 0
     candidate_since: float | None = None
     hold_since: float | None = None     # seit wann "kein Echo" gehalten wird
+    driving: bool = False               # letzte Messung waehrend der Fahrt (nicht gesichert)
     status: str = "init"
 
     def as_dict(self) -> dict:
@@ -128,9 +129,22 @@ class LevelFilter:
         s.status = status
 
     # ------------------------------------------------------------------ Kern
-    def update(self, percent: int, grams: int, quality: int, now: float) -> int | None:
-        """Eine Messung verarbeiten. Gibt den anzuzeigenden Fuellstand (%) zurueck."""
+    def update(
+        self, percent: int, grams: int, quality: int, now: float, driving: bool = False
+    ) -> int | None:
+        """Eine Messung verarbeiten. Gibt den anzuzeigenden Fuellstand (%) zurueck.
+
+        driving=True (Fahrterkennung von aussen, z. B. Starterbatterie > 13 V): die Messung wird
+        komplett ignoriert, der letzte Wert bleibt stehen, ein laufender Kandidat ebenfalls.
+        Der Zeitbezug (accepted_at) bleibt unveraendert, sodass der Korridor nach der Fahrt den
+        Verbrauch waehrend der Fahrt abdeckt.
+        """
         s = self.state
+        s.driving = driving
+        if driving:
+            s.status = "Fahrt erkannt, halte letzten Wert"
+            return s.display
+
         value = float(percent)
         if percent > 0 and grams > 0:
             s.capacity_g = int(round(grams * 100.0 / percent))
@@ -185,6 +199,7 @@ class LevelFilter:
         s = self.state
         return {
             "status": s.status,
+            "fahrt": s.driving,
             "letzter_plausibler_rohwert": s.accepted,
             "geglaettet": None if s.smoothed is None else round(s.smoothed, 2),
             "kandidat": s.candidate,

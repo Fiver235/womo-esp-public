@@ -171,5 +171,16 @@ Simulation über die echte Historie: `python tools/levelcontrol_filter_sim.py` (
 - Die Rohsensoren bleiben unverändert. Der Filterzustand wird über HA-Neustarts gesichert (RestoreEntity, extra_restore_state_data).
 - Code-Änderungen eines Custom Components greifen erst nach **HA-Neustart** (Entry-Reload reicht nicht). Deployment: `coordinator.py`, `sensor.py`, `smoothing.py` nach `\\192.168.100.15\config\custom_components\truma_levelcontrol\` kopieren, HA neu starten. Erledigt 31.10.2026 08:51; beide Entitäten erschienen ohne Fehler im Log.
 
+### Fahrterkennung (31.10.2026)
+
+Quelle: Eingangsspannung des Orion XS (`sensor.orion_xs_hq242394e7e_eingangsspannung`) über den Victron-GX im Womo (MQTT über WireGuard, 192.168.100.209). Der Eingang hängt an der Starterbatterie; bei laufendem Motor liegt er über 13 V (gemessen 13,4 V bei 49 A Ladestrom). **Fahrt = Spannung > 13,0 V**, Schwelle vom Nutzer festgelegt.
+
+- Während der Fahrt wird jede Messung ignoriert: Anzeige und laufender Kandidat bleiben stehen, Status „Fahrt erkannt, halte letzten Wert". Auch drei gleiche Messungen mit Qualität 3 (z. B. Sensor verrutscht) ersetzen den Wert nicht.
+- Der Zeitbezug läuft weiter: nach der Fahrt deckt der Korridor den Verbrauch während der Fahrt ab.
+- Ist die Entität nicht verfügbar (Tunnel zum GX weg) oder nicht numerisch, gilt „keine Fahrt"; dann arbeitet nur der Plausibilitätsfilter wie oben.
+- Die Rohsensoren messen weiter (Vergleich), nur der geglättete Füllstand hält.
+- Einstellbar unter Geräte & Dienste → Truma LevelControl → Konfigurieren: Spannungssensor (leer = aus) und Schwelle. Attribute am geglätteten Sensor: `fahrt`, `fahrt_spannung`, `fahrt_schwelle`, `fahrt_entitaet`.
+- Zu beobachten: Nach Motor-Aus hält die Starterbatterie einige Zeit über 13 V (Oberflächenladung). Das wirkt als Nachlaufzeit, in der das Schwappen abklingt. Lädt im Stand etwas die Starterbatterie (Landstrom, Solar über den Orion rückwärts), meldet die Erkennung fälschlich Fahrt und der Füllstand friert ein; dann die Schwelle anheben.
+
 Parameter (`MAX_RATE_PCT_PER_H`, `TOLERANCE_PCT`, `CONFIRM_SAMPLES`, `EMA_ALPHA`, `DISPLAY_HYSTERESIS_PCT`) stehen oben in `smoothing.py`. Offen: kleinere Flaschen (5 kg) bräuchten einen höheren Prozentsatz pro Stunde; die Flaschengröße ist aus der Messung bekannt, der Rate-Parameter könnte darauf skaliert werden.
 

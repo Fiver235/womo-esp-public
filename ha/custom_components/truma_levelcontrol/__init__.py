@@ -6,7 +6,15 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, Platform
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL, DOMAIN
+from .const import (
+    CONF_DRIVE_ENTITY,
+    CONF_DRIVE_MIN_VOLTAGE,
+    CONF_POLL_INTERVAL,
+    DEFAULT_DRIVE_ENTITY,
+    DEFAULT_DRIVE_MIN_VOLTAGE,
+    DEFAULT_POLL_INTERVAL,
+    DOMAIN,
+)
 from .coordinator import TrumaCoordinator
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
@@ -17,7 +25,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     address: str = entry.data[CONF_ADDRESS]
     poll_interval: int = entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
 
-    coordinator = TrumaCoordinator(hass, address, poll_interval)
+    drive_entity: str = entry.options.get(CONF_DRIVE_ENTITY, DEFAULT_DRIVE_ENTITY) or ""
+    drive_min_voltage = float(
+        entry.options.get(CONF_DRIVE_MIN_VOLTAGE, DEFAULT_DRIVE_MIN_VOLTAGE)
+    )
+
+    coordinator = TrumaCoordinator(
+        hass, address, poll_interval, drive_entity, drive_min_voltage
+    )
     await coordinator.async_refresh()  # does not raise if first read fails
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

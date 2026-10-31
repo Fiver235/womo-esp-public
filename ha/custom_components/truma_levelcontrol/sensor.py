@@ -170,6 +170,9 @@ class TrumaFilteredLevelSensor(_BaseEntity, RestoreEntity, SensorEntity):
         if self.coordinator.data is not None:
             attrs["rohwert"] = self.coordinator.data.percent
             attrs["rohwert_qualitaet"] = self.coordinator.data.quality
+        attrs["fahrt_entitaet"] = self.coordinator.drive_entity or None
+        attrs["fahrt_spannung"] = self.coordinator.drive_voltage
+        attrs["fahrt_schwelle"] = self.coordinator.drive_min_voltage
         return attrs
 
 

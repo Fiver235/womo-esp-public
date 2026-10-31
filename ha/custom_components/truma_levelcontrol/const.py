@@ -5,6 +5,15 @@ DOMAIN = "truma_levelcontrol"
 CONF_POLL_INTERVAL = "poll_interval"
 DEFAULT_POLL_INTERVAL = 600  # seconds (10 minutes)
 
+# Fahrterkennung fuer den Plausibilitaetsfilter (smoothing.py): solange der Wert dieser
+# Entitaet ueber der Schwelle liegt, faehrt das Wohnmobil und es werden keine Messwerte
+# uebernommen. Vorgabe: Eingangsspannung des Orion XS (Starterbatterie/Lichtmaschine)
+# ueber den Victron-GX im Womo. Leere Entitaet = Fahrterkennung aus.
+CONF_DRIVE_ENTITY = "drive_entity"
+CONF_DRIVE_MIN_VOLTAGE = "drive_min_voltage"
+DEFAULT_DRIVE_ENTITY = "sensor.orion_xs_hq242394e7e_eingangsspannung"
+DEFAULT_DRIVE_MIN_VOLTAGE = 13.0
+
 # Advertising manufacturer ID the sensor uses (0x5000). HA discovery matches on
 # this; see manifest.json "bluetooth".
 MANUFACTURER_ID = 0x5000

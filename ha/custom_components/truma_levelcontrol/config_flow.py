@@ -16,8 +16,17 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import callback
 import homeassistant.helpers.config_validation as cv
+from homeassistant.helpers import selector
 
-from .const import CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL, DOMAIN
+from .const import (
+    CONF_DRIVE_ENTITY,
+    CONF_DRIVE_MIN_VOLTAGE,
+    CONF_POLL_INTERVAL,
+    DEFAULT_DRIVE_ENTITY,
+    DEFAULT_DRIVE_MIN_VOLTAGE,
+    DEFAULT_POLL_INTERVAL,
+    DOMAIN,
+)
 
 
 class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -97,7 +106,7 @@ class TrumaConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class TrumaOptionsFlow(OptionsFlow):
-    """Let the user change the poll interval after setup."""
+    """Messintervall und Fahrterkennung nach der Einrichtung aendern."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         self._entry = config_entry
@@ -106,18 +115,37 @@ class TrumaOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         if user_input is not None:
+            # Feld geleert = Fahrterkennung aus (leerer String statt fehlendem Schluessel,
+            # sonst greift wieder die Vorgabe).
+            user_input.setdefault(CONF_DRIVE_ENTITY, "")
             return self.async_create_entry(title="", data=user_input)
 
-        current = self._entry.options.get(
-            CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
-        )
+        opts = self._entry.options
+        current = opts.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
+        drive_entity = opts.get(CONF_DRIVE_ENTITY, DEFAULT_DRIVE_ENTITY)
+        drive_min = opts.get(CONF_DRIVE_MIN_VOLTAGE, DEFAULT_DRIVE_MIN_VOLTAGE)
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
                     vol.Optional(
                         CONF_POLL_INTERVAL, default=current
-                    ): vol.All(cv.positive_int, vol.Range(min=30, max=86400))
+                    ): vol.All(cv.positive_int, vol.Range(min=30, max=86400)),
+                    vol.Optional(
+                        CONF_DRIVE_ENTITY,
+                        description={"suggested_value": drive_entity or None},
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor")
+                    ),
+                    vol.Optional(
+                        CONF_DRIVE_MIN_VOLTAGE, default=drive_min
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=10.0, max=16.0, step=0.1,
+                            unit_of_measurement="V",
+                            mode=selector.NumberSelectorMode.BOX,
+                        )
+                    ),
                 }
             ),
         )

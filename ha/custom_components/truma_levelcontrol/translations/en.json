@@ -5,12 +5,17 @@
       "bluetooth_confirm": {
         "title": "Add Truma LevelControl",
         "description": "Found device \"{name}\" ({address}). Do you want to add it?",
-        "data": { "name": "Name" }
+        "data": {
+          "name": "Name"
+        }
       },
       "user": {
         "title": "Add Truma LevelControl manually",
         "description": "Enter the sensor's Bluetooth MAC address.",
-        "data": { "address": "MAC address", "name": "Name" }
+        "data": {
+          "address": "MAC address",
+          "name": "Name"
+        }
       }
     },
     "abort": {
@@ -21,7 +26,12 @@
     "step": {
       "init": {
         "title": "Settings",
-        "data": { "poll_interval": "Measurement interval (seconds)" }
+        "data": {
+          "poll_interval": "Measurement interval (seconds)",
+          "drive_entity": "Drive detection: voltage sensor (empty = off)",
+          "drive_min_voltage": "Driving when voltage is above"
+        },
+        "description": "While driving (voltage above the threshold) the smoothed level ignores new readings."
       }
     }
   }
