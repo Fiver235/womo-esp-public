@@ -169,7 +169,7 @@ Simulation über die echte Historie: `python tools/levelcontrol_filter_sim.py` (
 - `sensor.gasflasche_<seite>_fullstand_geglattet` (%) mit Attributen `status` (ok / kein Echo, halte letzten Wert / unplausibel, Kandidat n/3 / neuer Pegel uebernommen), `letzter_plausibler_rohwert`, `geglaettet`, `kandidat`, `rohwert`, `rohwert_qualitaet`, `flaschengroesse_kg` (aus Gramm/Prozent der Messung, 11,0 kg).
 - `sensor.gasflasche_<seite>_gasmenge_geglattet` (kg) = geglätteter Füllstand × Flaschengröße.
 - Die Rohsensoren bleiben unverändert. Der Filterzustand wird über HA-Neustarts gesichert (RestoreEntity, extra_restore_state_data).
-- Code-Änderungen eines Custom Components greifen erst nach **HA-Neustart** (Entry-Reload reicht nicht). Deployment: `coordinator.py`, `sensor.py`, `smoothing.py` nach `\192.168.100.15\config\custom_components	ruma_levelcontrol\` kopieren, HA neu starten. Erledigt 31.10.2026 08:51; beide Entitäten erschienen ohne Fehler im Log.
+- Code-Änderungen eines Custom Components greifen erst nach **HA-Neustart** (Entry-Reload reicht nicht). Deployment: `coordinator.py`, `sensor.py`, `smoothing.py` nach `\\192.168.100.15\config\custom_components\truma_levelcontrol\` kopieren, HA neu starten. Erledigt 31.10.2026 08:51; beide Entitäten erschienen ohne Fehler im Log.
 
 Parameter (`MAX_RATE_PCT_PER_H`, `TOLERANCE_PCT`, `CONFIRM_SAMPLES`, `EMA_ALPHA`, `DISPLAY_HYSTERESIS_PCT`) stehen oben in `smoothing.py`. Offen: kleinere Flaschen (5 kg) bräuchten einen höheren Prozentsatz pro Stunde; die Flaschengröße ist aus der Messung bekannt, der Rate-Parameter könnte darauf skaliert werden.
 
