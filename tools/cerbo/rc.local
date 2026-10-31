@@ -1,0 +1,5 @@
+#!/bin/sh
+# Venus OS fuehrt /data/rc.local beim Boot aus; /data ueberlebt Firmware-Updates.
+# WireGuard-Tunnel ins Heimnetz (siehe /data/wireguard/wg-up.sh). Im Hintergrund,
+# weil WLAN und DNS beim Boot spaeter bereit sind als rc.local.
+/data/wireguard/wg-up.sh >/dev/null 2>&1 &

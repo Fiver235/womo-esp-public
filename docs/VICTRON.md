@@ -34,7 +34,19 @@ HA 192.168.100.15 ──LAN──► FRITZ!Box .254 ──WireGuard──► Cer
 | Autostart | `/data/rc.local` startet `wg-up.sh` im Hintergrund; /data und rc.local überleben Firmware-Updates |
 | Werkzeug | `tools/cerbo_ssh.py` (paramiko, Passwort aus `CERBO_PW`, `@script` per stdin, `put:` per SFTP) |
 
-Ergebnis 31.10. 11:29 UTC: Handshake sofort, Cerbo pingt .250 und HA durch den Tunnel.
+Ergebnis 31.10. 11:29 UTC: Handshake sofort, Cerbo pingt .250 und HA durch den Tunnel; Rückweg vom LAN (homebridge → 192.168.100.209) 4/4, ARP über die FRITZ!Box.
+
+### Home Assistant (erledigt 31.10. 12:40)
+
+- Cerbo: `MQTT on LAN (SSL)` per dbus eingeschaltet (`/Settings/Services/MqttLocal = 1`), Sicherheitsprofil 2, Broker flashmq auf 8883/1883, Zertifikat selbstsigniert `venus.local`. Portal-ID **c4f3129abeb4**.
+- Geräte am Cerbo: Orion XS 12/12-50A (VE.Direct-USB, erscheint als `alternator`), SmartSolar MPPT 75/15, BMV-702, Lithium-Batterie (CAN), MultiPlus 12/3000/120-16.
+- HA: zweite `victron_mqtt`-Instanz „Victron OS c4f3129abeb4 (192.168.100.209:8883)", SSL, Modus Full, ohne Passwort, geladen; Entitäten z. B. `sensor.orion_xs_hq242394e7e_eingangsspannung`.
+
+### Offen / Nacharbeit
+
+- Root-Passwort des Cerbo nach Abschluss ändern (wurde im Chat genannt); SSH kann an bleiben (nur Womo-WLAN/VPN).
+- FRITZ!Box-Route 100.64.0.0/10 und Headscale-ACL-Regel `ha` sind für den Cerbo nicht mehr nötig → zurückbauen oder bewusst behalten.
+- Recorder: hochfrequente Victron-Sensoren ggf. ausschließen.
 
 Die vormittags eingerichtete FRITZ!Box-Route 100.64.0.0/10 → .250 und die Headscale-ACL-Regel für `ha` werden für den Cerbo nicht mehr gebraucht (Rückbau offen, schaden nicht). Historie der Headscale-Variante siehe unten.
 
@@ -64,8 +76,7 @@ Verworfene Alternativen: Tailscale-Add-on in HA (HA selbst als Client; weniger E
 5. HA: Einstellungen → Geräte & Dienste → Integration hinzufügen → `victron_mqtt` (zweite Instanz): Host = Cerbo-Tailnet-IP, Port 8883, SSL an, Passwort, Modus „Full", Namen mit Präfix „Womo". Alternativ Core-Integration `victron_gx`.
 6. Entitäten prüfen: Batterie (SmartShunt/BMV), Solarladeregler, DC/DC-Lader (Orion XS), Systemübersicht; Recorder-Ausschlüsse für hochfrequente Werte.
 
-## Offene Punkte
+## Offene Punkte (Historie)
 
-- Verhalten von TailscaleGX mit Headscale (Login-Server-Option) in der Praxis.
-- Cerbo-Firmwarestand (Package Manager braucht Venus OS ≥ 3.10, TailscaleGX ≥ v1.6).
-- Ob der Orion XS per VE.Direct angebunden ist.
+- ~~TailscaleGX mit Headscale~~ – hinfällig (Speicher).
+- ~~Orion XS per VE.Direct?~~ – ja, erscheint als `alternator.ttyUSB0`.
