@@ -45,7 +45,7 @@ Ergebnis 31.10. 11:29 UTC: Handshake sofort, Cerbo pingt .250 und HA durch den T
 ### Offen / Nacharbeit
 
 - Root-Passwort des Cerbo nach Abschluss ändern (wurde im Chat genannt); SSH kann an bleiben (nur Womo-WLAN/VPN).
-- FRITZ!Box-Route 100.64.0.0/10 und Headscale-ACL-Regel `ha` sind für den Cerbo nicht mehr nötig → zurückbauen oder bewusst behalten.
+- Headscale-ACL-Regel `ha` am 31.10. wieder entfernt (Policy steht wie vor dem Tag, Sicherung `policy.hujson.bak-*-vor-rueckbau`). FRITZ!Box-Route 100.64.0.0/10 → .250 besteht noch; für den Cerbo nicht nötig, Entscheidung bei Rudi.
 - Recorder: hochfrequente Victron-Sensoren ggf. ausschließen.
 
 Die vormittags eingerichtete FRITZ!Box-Route 100.64.0.0/10 → .250 und die Headscale-ACL-Regel für `ha` werden für den Cerbo nicht mehr gebraucht (Rückbau offen, schaden nicht). Historie der Headscale-Variante siehe unten.
