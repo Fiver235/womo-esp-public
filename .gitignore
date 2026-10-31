@@ -5,3 +5,5 @@ logs/
 .claude/settings.local.json
 *.conf
 secrets/
+__pycache__/
+*.pyc
