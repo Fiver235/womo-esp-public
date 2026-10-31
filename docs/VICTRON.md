@@ -2,6 +2,8 @@
 
 Stand 31.10.2026. Ziel: Cerbo GX, Orion XS und MPPT aus dem Womo in das heimische Home Assistant (192.168.100.15, HA OS 2026.10.4) einbinden. Der heimische Cerbo (192.168.100.200) läuft dort bereits über die HACS-Integration `victron_mqtt`.
 
+> **Korrektur 01.11.2026:** Das Gerät im Womo ist ein **Color Control GX** (Produkt-ID C001, Seriennummer HQ18265EVPR, per MQTT `platform/0/Device/Model` gelesen), **kein Cerbo GX**. „Cerbo" meint in diesem Dokument das Womo-Gerät, außer beim Heim-Cerbo 192.168.100.200. Installierte Firmware laut MQTT **v3.90-beta9**, im Backup-Slot v3.56. Adresse im Womo-WLAN 192.168.1.25 per DHCP. Am MultiPlus hängt ein Digital Multi Control (`vebus/257/Devices/Dmc/Version` 1120120), deshalb ist `/ModeIsAdjustable` = 0. Root-SSH lehnt das am 01.11. genannte Passwort ab. MultiPlus-Taster: siehe `docs/MULTIPLUS-SCHALTER.md`.
+
 ## Ist-Zustand (geprüft)
 
 | | |
@@ -17,7 +19,7 @@ Venus OS hat **kein** eingebautes Tailscale (Victron hat die native Umsetzung zu
 
 ## Datenweg – Entscheidung 31.10.2026 (nachmittags): **WireGuard direkt auf dem Cerbo**
 
-Der Plan mit Headscale/TailscaleGX scheiterte am Speicher: Der Cerbo GX (Venus OS v3.56, armv7, 512-MB-NAND) hat eine **/data-Partition von nur 29 MB** (3,7 MB belegt, fast nur Logs). TailscaleGX ist 36 MB groß, Aufräumen hilft nicht; 45 MB UBI sind zwar unverteilt, ein `ubirsvol` am laufenden Gerät wurde als zu riskant verworfen.
+Der Plan mit Headscale/TailscaleGX scheiterte am Speicher: Der Color Control GX (am 31.10. als Venus OS v3.56 notiert, armv7, 512-MB-NAND) hat eine **/data-Partition von nur 29 MB** (3,7 MB belegt, fast nur Logs). TailscaleGX ist 36 MB groß, Aufräumen hilft nicht; 45 MB UBI sind zwar unverteilt, ein `ubirsvol` am laufenden Gerät wurde als zu riskant verworfen.
 
 Stattdessen ist der Cerbo jetzt **WireGuard-Peer der FRITZ!Box**, wie die ESPs, mit Heimnetz-Adresse **192.168.100.209**:
 

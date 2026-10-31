@@ -7,7 +7,13 @@
 # - wireguard: eigener Peer in der Fritzbox (NICHT derselbe wie der Alde-ESP),
 #   Tunnel-Adresse 192.168.100.208. HA erreicht den ESP unter dieser Adresse
 #   (ESPHome-Integration -> manuell hinzufuegen, Port 6053, proxy_api_encryption_key).
-# - Platzierung: nahe am Gaskasten, im WLAN des Nighthawk M5, feste IP 192.168.1.241.
+# - Platzierung: im Innenraum (WLAN ca. -63 dBm), im WLAN des Nighthawk M5, feste IP 192.168.1.241.
+#
+# - MultiPlus-Taster (seit 01.11.2026, ersetzt das Digital Multi Control):
+#   federnder Schalter (EIN)-0-(AUS) an GPIO25/GPIO26 gegen GND. Jeder Tastendruck
+#   schreibt EINMAL per Modbus TCP Register 33 (/Mode) am Color Control GX:
+#   3 = Ein, 4 = Aus. Keine Wiederholung, kein Schreiben beim Start.
+#   Konzept und Inbetriebnahme: docs/MULTIPLUS-SCHALTER.md
 #
 # Flashen (erstes Mal per USB, danach OTA):
 #   .\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx
@@ -16,10 +22,18 @@
 substitutions:
   name: womo-ble-proxy
   friendly_name: "Womo BLE-Proxy"
+  # Color Control GX im Womo-WLAN. Achtung: derzeit DHCP-Adresse; feste Adresse am GX
+  # (Vorschlag .242) erst nach Freigabe eintragen und dann hier anpassen.
+  gx_ip: "192.168.1.25"
+  # Unit-ID des Dienstes com.victronenergy.vebus (GX: Modbus TCP -> Verfuegbare Dienste).
+  # 246 ist der uebliche Wert fuer den VE.Bus-Port des CCGX, vor dem ersten Test pruefen.
+  vebus_unit_id: "246"
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  includes:
+    - womo_modbus.h
 
 esp32:
   board: esp32dev
@@ -89,6 +103,55 @@ binary_sensor:
   - platform: status
     name: "Proxy Status"
 
+  # MultiPlus-Taster: Kontakt schliesst nach GND, interner Pull-up. Nur die Druckflanke
+  # zaehlt; beide gleichzeitig = kein Befehl; die ersten 10 s nach dem Start werden ignoriert.
+  - platform: gpio
+    id: taster_ein
+    name: "MultiPlus Taster EIN"
+    icon: mdi:power-plug
+    pin:
+      number: GPIO25
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_press:
+      - lambda: |-
+          if (millis() < 10000) { ESP_LOGW("multiplus", "EIN ignoriert (Startphase)"); return; }
+          if (id(taster_aus).state) { ESP_LOGW("multiplus", "EIN und AUS gleichzeitig, kein Befehl"); return; }
+          if (womo_modbus::start_write("${gx_ip}", ${vebus_unit_id}, 33, 3)) {
+            ESP_LOGI("multiplus", "Taster EIN -> Modus 3 an ${gx_ip}");
+            id(multiplus_befehl).publish_state("EIN wird gesendet");
+          } else {
+            ESP_LOGW("multiplus", "EIN verworfen, vorheriger Befehl laeuft noch");
+          }
+  - platform: gpio
+    id: taster_aus
+    name: "MultiPlus Taster AUS"
+    icon: mdi:power-plug-off
+    pin:
+      number: GPIO26
+      mode:
+        input: true
+        pullup: true
+      inverted: true
+    filters:
+      - delayed_on: 50ms
+      - delayed_off: 50ms
+    on_press:
+      - lambda: |-
+          if (millis() < 10000) { ESP_LOGW("multiplus", "AUS ignoriert (Startphase)"); return; }
+          if (id(taster_ein).state) { ESP_LOGW("multiplus", "EIN und AUS gleichzeitig, kein Befehl"); return; }
+          if (womo_modbus::start_write("${gx_ip}", ${vebus_unit_id}, 33, 4)) {
+            ESP_LOGI("multiplus", "Taster AUS -> Modus 4 an ${gx_ip}");
+            id(multiplus_befehl).publish_state("AUS wird gesendet");
+          } else {
+            ESP_LOGW("multiplus", "AUS verworfen, vorheriger Befehl laeuft noch");
+          }
+
 sensor:
   - platform: wireguard
     latest_handshake:
@@ -101,6 +164,28 @@ text_sensor:
   - platform: wireguard
     address:
       name: "WireGuard Adresse"
+  - platform: template
+    id: multiplus_befehl
+    name: "MultiPlus letzter Tasterbefehl"
+    icon: mdi:message-processing
+
+# Ergebnis der Modbus-Task in den Hauptloop holen (Entitaeten nur von hier aus aktualisieren).
+interval:
+  - interval: 250ms
+    then:
+      - lambda: |-
+          static uint32_t seen = 0;
+          uint32_t seq = womo_modbus::g_seq.load();
+          if (seq == seen) return;
+          seen = seq;
+          const char *cmd = womo_modbus::g_value.load() == 3 ? "EIN" : "AUS";
+          if (womo_modbus::g_result.load() == womo_modbus::OK) {
+            ESP_LOGI("multiplus", "%s vom GX bestaetigt", cmd);
+            id(multiplus_befehl).publish_state(std::string(cmd) + " bestaetigt");
+          } else {
+            ESP_LOGW("multiplus", "%s fehlgeschlagen: %s", cmd, womo_modbus::g_error);
+            id(multiplus_befehl).publish_state(std::string(cmd) + " Fehler: " + womo_modbus::g_error);
+          }
 
 button:
   - platform: restart
