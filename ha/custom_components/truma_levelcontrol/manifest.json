@@ -1,0 +1,14 @@
+{
+  "domain": "truma_levelcontrol",
+  "name": "Truma LevelControl",
+  "version": "2.0.0",
+  "documentation": "https://github.com/local/truma_levelcontrol",
+  "config_flow": true,
+  "requirements": ["bleak>=0.21.0", "bleak-retry-connector>=3.0.0"],
+  "dependencies": ["bluetooth_adapters"],
+  "bluetooth": [
+    { "manufacturer_id": 20480 }
+  ],
+  "codeowners": [],
+  "iot_class": "local_polling"
+}

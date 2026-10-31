@@ -1,0 +1,28 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "bluetooth_confirm": {
+        "title": "Add Truma LevelControl",
+        "description": "Found device \"{name}\" ({address}). Do you want to add it?",
+        "data": { "name": "Name" }
+      },
+      "user": {
+        "title": "Add Truma LevelControl manually",
+        "description": "Enter the sensor's Bluetooth MAC address.",
+        "data": { "address": "MAC address", "name": "Name" }
+      }
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Settings",
+        "data": { "poll_interval": "Measurement interval (seconds)" }
+      }
+    }
+  }
+}

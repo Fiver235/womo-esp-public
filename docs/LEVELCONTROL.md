@@ -133,7 +133,7 @@ Befehl: python tools/levelcontrol_dump.py <MAC> --proxy 192.168.100.208 --write-
 
 1. ESP32 per USB flashen: `.\.venv\Scripts\esphome.exe run esphome\womo-ble-proxy.yaml --device COMx`. Im Log: `wireguard: ... online`, `latest_handshake` aktualisiert sich.
 2. Zu Hause in HA: Einstellungen → Geräte & Dienste → ESPHome → Gerät hinzufügen → Host `192.168.100.208`, Port 6053, Schlüssel `proxy_api_encryption_key`. Danach erscheint der ESP als Bluetooth-Proxy (Einstellungen → Bluetooth). Erledigt am 27.10.2026 („Womo BLE-Proxy").
-3. ~~HACS~~ **Manuell** installieren: HACS lehnt das Repository ab (alle Dateien im Wurzelverzeichnis, keine `hacs.json`). Stattdessen die Dateien per Samba-Share nach `\\homeassistant\config\custom_components\truma_levelcontrol\` kopieren (`*.py`, `manifest.json`, `strings.json`; `de.json`/`en.json` nach `translations\`), danach HA neu starten. Erledigt am 27.10.2026 (Version 2.0.0, Dateien vorher auf Netzwerk-/Shell-Aufrufe geprüft: keine).
+3. ~~HACS~~ **Manuell** installieren: HACS lehnt das Repository ab (alle Dateien im Wurzelverzeichnis, keine `hacs.json`). Die eingesetzte (und seit 31.10.2026 gepatchte) Fassung liegt im Repo unter `ha/custom_components/truma_levelcontrol/`; von dort die Dateien per Samba-Share nach `\\homeassistant\config\custom_components\truma_levelcontrol\` kopieren (`*.py`, `manifest.json`, `strings.json`; `de.json`/`en.json` nach `translations\`), danach HA neu starten. Erledigt am 27.10.2026 (Version 2.0.0, Dateien vorher auf Netzwerk-/Shell-Aufrufe geprüft: keine).
 4. Die Sensoren werden per Discovery gemeldet oder manuell über ihre Bluetooth-MAC hinzugefügt. Truma-App dabei geschlossen halten. Messintervall unter „Konfigurieren" setzen (z. B. 30 min; jede Messung kostet Batterie des Sensors).
 
 ### Zu beachten
@@ -141,3 +141,35 @@ Befehl: python tools/levelcontrol_dump.py <MAC> --proxy 192.168.100.208 --write-
 - Die aktive BLE-Verbindung läuft über LTE und den Tunnel; bei schlechtem Empfang schlägt eine Messung fehl und wird beim nächsten Intervall wiederholt.
 - Zwei Sensoren mit gleichem Namen: die Integration unterscheidet sie per MAC; in HA ggf. umbenennen (Flasche links/rechts).
 - Falls der Proxy WLAN oder Tunnel verliert, startet er **nicht** neu (`reboot_timeout: 0s`); ein Button „Proxy Neustart" ist als Entität vorhanden.
+
+## Glättung der Füllstände in Home Assistant (31.10.2026)
+
+### Befund aus der HA-Historie 27.–31.10.2026
+
+Zustandswechsel von `sensor.gasflasche_{links,rechts}_fullstand` und `_messqualitat`, Messintervall 10 min:
+
+- **Stand, Sensor unter der Flasche (rechts, 28.10. 16:25 → 31.10. 08:25):** 100 % → 67 % in 64 h, gleichmäßig ≈ 0,5 %/h (≈ 55 g/h, Alde auf Gas). Rauschen ±1 %: 75 ↔ 76 wechselt am 30.10. zwischen 20:15 und 21:46 zehnmal, Qualität durchgehend 3.
+- **Fahrt (31.10. ab 08:14, 20 min):** rechts weiter plausibel 69/68/69/67 % mit Qualität 3. Links fiel von 100 % (17 h unverändert) auf **0 % / Qualität 0** und blieb bei den Messungen 08:14, 08:24 und 08:34 dort; nach dem Halt um 08:51 wieder 100 % / Qualität 3. „Kein Echo" betrifft also nicht beide Sensoren gleich – vermutlich Schwappen bzw. Ankopplung.
+- **Ausreißer mit Qualität 3** kommen vor: rechts 28.10. 15:16 **99 %** zwischen lauter 12–14 % (Schreibtisch), links 29.10. 00:07 **15 %** nach 7 %, rechts 28.10. 00:25 **0 %/Q0** für 27 s zwischen 100 % und 98 %.
+- **Qualität 0 ist kein Leer-Indikator und kein Fehler-Indikator:** links lieferte 28.10. 21:31 bis 29.10. 00:07 bei 6–8 % Qualität 0 mit weiterhin brauchbaren Prozentwerten (schwaches Echo bei niedrigem Pegel), während eine volle Flasche in der Fahrt 0 %/Q0 liefert. Qualität allein taugt daher nicht als Filterkriterium.
+
+### Filter (`ha/custom_components/truma_levelcontrol/smoothing.py`)
+
+Physik statt Qualität: Zwischen zwei Messungen kann der Füllstand nur um den Verbrauch sinken und nie steigen, außer beim Flaschenwechsel.
+
+1. **Korridor:** `letzter Wert − 6 %/h · Δt − 3 %` bis `letzter Wert + 3 %` → sofort übernommen, Qualität egal (deckt das ±1-%-Rauschen und schwache Echos bei fast leerer Flasche ab). 6 %/h ≈ 0,66 kg/h liegt über Alde-Brenner (0,43 kg/h) plus Kocher.
+2. **Außerhalb, Qualität ≥ 1:** Kandidat. Erst **3 aufeinanderfolgende Messungen** (±3 %) übernehmen den neuen Pegel → Flaschenwechsel oder umgesetzter Sensor wird nach 30 min angezeigt, Einzelausreißer (99 %, 15 %) nie.
+3. **Außerhalb, Qualität 0 („kein Echo"):** letzten Wert halten. Weil der Korridor mit der Zeit nach unten wächst, wird eine echte Leerung trotzdem sichtbar: von 7 % aus ist 0 % nach ~40 min plausibel, von 100 % aus erst nach 16 h.
+4. **Glättung** der übernommenen Werte: Median aus 3 → exponentielle Glättung (α 0,4) → Anzeige ändert sich erst bei ≥ 1 % Abweichung. Das 75/76-Flackern verschwindet, die Anzeige läuft dem Rohwert um ≤ 1 % nach.
+
+Simulation über die echte Historie: `python tools/levelcontrol_filter_sim.py` (Daten im Skript, 10-min-Raster). Ergebnis: rechts 35 von 490, links ~45 von 494 Messungen nicht direkt übernommen; alle Fahrt-Nullen gehalten, beide Flaschenwechsel am 30.10. (46 % → 100 %) nach 30 min übernommen, kein Ausreißer durchgekommen.
+
+### Entitäten
+
+- `sensor.gasflasche_<seite>_fullstand_geglattet` (%) mit Attributen `status` (ok / kein Echo, halte letzten Wert / unplausibel, Kandidat n/3 / neuer Pegel uebernommen), `letzter_plausibler_rohwert`, `geglaettet`, `kandidat`, `rohwert`, `rohwert_qualitaet`, `flaschengroesse_kg` (aus Gramm/Prozent der Messung, 11,0 kg).
+- `sensor.gasflasche_<seite>_gasmenge_geglattet` (kg) = geglätteter Füllstand × Flaschengröße.
+- Die Rohsensoren bleiben unverändert. Der Filterzustand wird über HA-Neustarts gesichert (RestoreEntity, extra_restore_state_data).
+- Code-Änderungen eines Custom Components greifen erst nach **HA-Neustart** (Entry-Reload reicht nicht). Deployment: `coordinator.py`, `sensor.py`, `smoothing.py` nach `\192.168.100.15\config\custom_components	ruma_levelcontrol\` kopieren, HA neu starten. Erledigt 31.10.2026 08:51; beide Entitäten erschienen ohne Fehler im Log.
+
+Parameter (`MAX_RATE_PCT_PER_H`, `TOLERANCE_PCT`, `CONFIRM_SAMPLES`, `EMA_ALPHA`, `DISPLAY_HYSTERESIS_PCT`) stehen oben in `smoothing.py`. Offen: kleinere Flaschen (5 kg) bräuchten einen höheren Prozentsatz pro Stunde; die Flaschengröße ist aus der Messung bekannt, der Rate-Parameter könnte darauf skaliert werden.
+

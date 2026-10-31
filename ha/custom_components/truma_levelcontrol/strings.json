@@ -1,0 +1,28 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "bluetooth_confirm": {
+        "title": "Truma LevelControl hinzufügen",
+        "description": "Gerät „{name}“ ({address}) wurde gefunden. Möchtest du es hinzufügen?",
+        "data": { "name": "Name" }
+      },
+      "user": {
+        "title": "Truma LevelControl manuell hinzufügen",
+        "description": "Gib die Bluetooth-MAC-Adresse des Sensors ein.",
+        "data": { "address": "MAC-Adresse", "name": "Name" }
+      }
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Einstellungen",
+        "data": { "poll_interval": "Messintervall (Sekunden)" }
+      }
+    }
+  }
+}
