@@ -2,7 +2,7 @@
 
 Stand 31.10.2026. Ziel: Cerbo GX, Orion XS und MPPT aus dem Womo in das heimische Home Assistant (192.168.100.15, HA OS 2026.10.4) einbinden. Der heimische Cerbo (192.168.100.200) läuft dort bereits über die HACS-Integration `victron_mqtt`.
 
-> **Korrektur 01.11.2026:** Das Gerät im Womo ist ein **Color Control GX** (Produkt-ID C001, Seriennummer HQ18265EVPR, per MQTT `platform/0/Device/Model` gelesen), **kein Cerbo GX**. „Cerbo" meint in diesem Dokument das Womo-Gerät, außer beim Heim-Cerbo 192.168.100.200. Installierte Firmware laut MQTT **v3.90-beta9**, im Backup-Slot v3.56. Adresse im Womo-WLAN 192.168.1.25 per DHCP. Am MultiPlus hängt ein Digital Multi Control (`vebus/257/Devices/Dmc/Version` 1120120), deshalb ist `/ModeIsAdjustable` = 0. Root-SSH lehnt das am 01.11. genannte Passwort ab. MultiPlus-Taster: siehe `docs/MULTIPLUS-SCHALTER.md`.
+> **Korrektur 01.11.2026:** Das Gerät im Womo ist ein **Color Control GX** (Produkt-ID C001, Seriennummer HQ18265EVPR, per MQTT `platform/0/Device/Model` gelesen), **kein Cerbo GX**. „Cerbo" meint in diesem Dokument das Womo-Gerät, außer beim Heim-Cerbo 192.168.100.200. Installierte Firmware laut MQTT **v3.90-beta9**, im Backup-Slot v3.56. Adresse im Womo-WLAN seit 01.11.2026 **192.168.1.242 fest** (vorher 192.168.1.25 per DHCP), Modbus TCP an. Am MultiPlus hängt ein Digital Multi Control (`vebus/257/Devices/Dmc/Version` 1120120), deshalb ist `/ModeIsAdjustable` = 0. Root-SSH lehnt das am 01.11. genannte Passwort ab. MultiPlus-Taster: siehe `docs/MULTIPLUS-SCHALTER.md`.
 
 ## Ist-Zustand (geprüft)
 

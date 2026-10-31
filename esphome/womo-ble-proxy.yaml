@@ -22,11 +22,10 @@
 substitutions:
   name: womo-ble-proxy
   friendly_name: "Womo BLE-Proxy"
-  # Color Control GX im Womo-WLAN. Achtung: derzeit DHCP-Adresse; feste Adresse am GX
-  # (Vorschlag .242) erst nach Freigabe eintragen und dann hier anpassen.
-  gx_ip: "192.168.1.25"
-  # Unit-ID des Dienstes com.victronenergy.vebus (GX: Modbus TCP -> Verfuegbare Dienste).
-  # 246 ist der uebliche Wert fuer den VE.Bus-Port des CCGX, vor dem ersten Test pruefen.
+  # Color Control GX im Womo-WLAN, feste Adresse seit 01.11.2026 (vorher DHCP .25).
+  gx_ip: "192.168.1.242"
+  # Unit-ID des Dienstes com.victronenergy.vebus.ttyO1 (VE.Bus-Instanz 257), am 01.11.2026
+  # in der Modbus-TCP-Diensteliste des GX abgelesen.
   vebus_unit_id: "246"
 
 esphome:

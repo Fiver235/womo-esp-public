@@ -2,7 +2,7 @@
 """Befehle per SSH auf dem Cerbo GX (Venus OS) ausfuehren.
 
 Passwort kommt aus der Umgebungsvariable CERBO_PW (nie als Argument), Host aus CERBO_HOST
-(Default 192.168.1.25), Benutzer root.
+(Default 192.168.1.242), Benutzer root.
 
     $env:CERBO_PW = "..."; python tools/cerbo_ssh.py "uname -a" "cat /opt/victronenergy/version"
 """
@@ -16,7 +16,7 @@ import paramiko
 
 
 def main(argv: list[str]) -> int:
-    host = os.environ.get("CERBO_HOST", "192.168.1.25")
+    host = os.environ.get("CERBO_HOST", "192.168.1.242")
     pw = os.environ.get("CERBO_PW")
     if not pw:
         print("CERBO_PW nicht gesetzt", file=sys.stderr)
