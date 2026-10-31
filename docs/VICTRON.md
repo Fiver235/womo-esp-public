@@ -25,7 +25,8 @@ Cerbo ──(accept-routes: 192.168.100.0/24 via 100.64.0.1)──► .250 ─�
 - **FRITZ!Box** (durch Rudi): Heimnetz → Netzwerk → Netzwerkeinstellungen → IPv4-Routen → Neue Route: Netzwerk `100.64.0.0`, Subnetzmaske `255.192.0.0`, Gateway `192.168.100.250`, aktiv. Damit erreichen alle Geräte im Heimnetz das Tailnet über .250.
 - **Host .250:** keine Änderung nötig (ip_forward=1, FORWARD accept, Tailscale-Regel `oifname tailscale0 accept`; kein Masquerading, der Cerbo sieht HA als 192.168.100.15).
 - **Cerbo:** Subnetz-Route annehmen (`tailscale set --accept-routes`), damit Antworten an 192.168.100.0/24 durch den Tunnel gehen. Die Route ist in Headscale bereits freigegeben.
-- **Test:** von HA aus Ping auf 100.64.0.1 (beweist die FRITZ!Box-Route), danach Ping auf die Cerbo-Adresse (beweist accept-routes).
+- **Headscale-ACL (`/etc/headscale/policy.hujson`):** Die Policy erlaubt nur Benutzer als Quelle (`group:admins`, `birgit@`). Pakete mit Heimnetz-Absender werden am Zielknoten verworfen, obwohl die Route stimmt. Ergänzt am 31.10.2026: Host `ha` = 192.168.100.15/32 und Regel `{ src: ["ha"], dst: ["*:*"] }` (nach Registrierung des Cerbo auf dessen Adresse und Port 8883 einengen). Prüfen/laden: `headscale policy check -f … && systemctl reload headscale`. Sicherung: `policy.hujson.bak-<Datum>`.
+- **Test (bestanden 31.10.2026):** Vom LAN-Host homebridge (.12, kein VPN) Ping auf 100.64.0.1 OK mit ICMP-Redirect der FRITZ!Box auf .250; nach der ACL-Regel (temporär auch für .12) Ping auf das Notebook 100.64.0.3 durch den Tunnel OK (4/4, ~40 ms). Test-Host danach wieder aus der Policy entfernt.
 
 Verworfene Alternativen: Tailscale-Add-on in HA (HA selbst als Client; weniger Eingriffe, aber nur HA profitiert), HAProxy-TCP-Weiterleitung auf .250 (nur MQTT), Masquerading auf .250 (verdeckt die Quelladresse).
 
@@ -34,7 +35,7 @@ Verworfene Alternativen: Tailscale-Add-on in HA (HA selbst als Client; weniger E
 1. Headscale: Pre-Auth-Key für den Cerbo erzeugen (`headscale preauthkeys create --user rudi --expiration 24h`).
 2. Cerbo (Womo): Package Manager → TailscaleGX installieren → Einstellungen → Allgemein → Remote access via tailscale: Login-Server `https://headscale.winsysteme.de`, Auth-Key eintragen, Verbindung erlauben. Cerbo zeigt seine 100.64.0.x-Adresse. Knoten in Headscale prüfen (`headscale nodes list`).
 3. Cerbo: Einstellungen → Dienste → **MQTT on LAN (SSL)** einschalten; Passwort des Sicherheitsprofils notieren. Prüfen, dass Orion XS und MPPT per **VE.Direct** am Cerbo hängen (Geräteliste).
-4. FRITZ!Box-Route eintragen, am Cerbo accept-routes setzen; Test von HA: Ping auf 100.64.0.1 und auf die Cerbo-IP, dann `openssl s_client` auf Cerbo-IP:8883.
+4. ~~FRITZ!Box-Route eintragen~~ (erledigt 31.10.), am Cerbo accept-routes setzen; Test von HA: Ping auf die Cerbo-IP, dann `openssl s_client` auf Cerbo-IP:8883.
 5. HA: Einstellungen → Geräte & Dienste → Integration hinzufügen → `victron_mqtt` (zweite Instanz): Host = Cerbo-Tailnet-IP, Port 8883, SSL an, Passwort, Modus „Full", Namen mit Präfix „Womo". Alternativ Core-Integration `victron_gx`.
 6. Entitäten prüfen: Batterie (SmartShunt/BMV), Solarladeregler, DC/DC-Lader (Orion XS), Systemübersicht; Recorder-Ausschlüsse für hochfrequente Werte.
 
