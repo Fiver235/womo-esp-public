@@ -47,7 +47,7 @@ Keine Spannung an die Kontakte legen. Bei langer Leitung externe 10-kΩ-Pull-ups
 | 4 | Landstrom-Stromgrenze, die bisher am DMC-Drehknopf stand, über GX/VRM/HA einstellen | Rudi | offen |
 | 5 | GX: Modbus TCP einschalten und Unit-ID ablesen | Claude | erledigt 01.11. per MQTT (`W/…/settings/0/Settings/Services/Modbus` = 1), Unit-ID 246 |
 | 6 | GX: feste Adresse 192.168.1.242 | Claude | erledigt 01.11. per MQTT, siehe unten; WireGuard-Tunnel blieb stehen |
-| 7 | Proxy per OTA flashen | Claude | Firmware kompiliert, nicht geflasht |
+| 7 | Proxy per OTA flashen | Claude | erledigt 01.11. 07:35; Entitäten „MultiPlus Taster EIN/AUS" und „MultiPlus letzter Tasterbefehl" in HA vorhanden |
 | 8 | Testplan aus dem Konzept: lokal EIN → VRM AUS → lokal EIN → … , ESP-Neustart ohne Tastendruck, WLAN-Unterbrechung | Rudi + Claude | offen |
 
 ## Grenzen
