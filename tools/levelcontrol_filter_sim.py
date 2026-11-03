@@ -3,11 +3,12 @@
 Home-Assistant-Historie beider LevelControl laufen lassen.
 
 Datenbasis: Zustandswechsel von sensor.gasflasche_{links,rechts}_{fullstand,messqualitat} aus dem
-HA-Recorder, 27.10.-31.10.2026 (abgeschrieben am 31.10.2026 08:35). HA speichert nur Aenderungen;
-die Integration misst alle 10 min. Die Simulation legt daher ein 10-Minuten-Raster ueber die
-Stufenfunktion (gleicher Wert bis zur naechsten Aenderung), "unavailable" unterbricht die Reihe.
+HA-Recorder, 27.10.-31.10.2026 und rechts 2.-3.11.2026 (fast leere Flasche mit Fehlmessungen).
+HA speichert nur Aenderungen; die Integration misst alle ~10 min. Die Simulation legt daher ein
+Raster von 10:08 min ueber die Stufenfunktion (gleicher Wert bis zur naechsten Aenderung),
+"unavailable" unterbricht die Reihe.
 
-    python tools/levelcontrol_filter_sim.py [--sensor links|rechts] [--all]
+    python tools/levelcontrol_filter_sim.py [--sensor links|rechts|leer] [--all] [--check]
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "ha" / "custom_components" / "truma_levelcontrol"))
-from smoothing import LevelFilter  # noqa: E402
+from smoothing import FilterState, LevelFilter  # noqa: E402
 
 CAPACITY_G = 11000  # beide Flaschen 11 kg Stahl
 
@@ -244,8 +245,115 @@ LINKS_QUAL = """
 1031 08:14 0
 """
 
+# Rechte Flasche fast leer, nicht getauscht: Fehlmessungen mit Qualitaet 3 (Ausloeser fuer den Umbau)
+LEER_FUELL = """
+1102 23:00 13
+1102 23:00:46 12
+1102 23:21 11
+1103 01:43 10
+1103 01:53 11
+1103 02:03 10
+1103 06:37 9
+1103 07:48 8
+1103 08:08 7
+1103 08:18 8
+1103 08:38 7
+1103 08:48 8
+1103 09:19 7
+1103 09:29 9
+1103 09:39 7
+1103 09:59 40
+1103 10:09 41
+1103 10:19 8
+1103 10:30 7
+1103 10:40 40
+1103 10:50 7
+1103 11:10 40
+1103 11:20 8
+1103 11:30 9
+1103 11:40 7
+1103 11:51 8
+1103 12:01 9
+1103 12:11 7
+1103 12:21 6
+1103 12:31 7
+1103 12:41 11
+1103 12:51 7
+1103 13:02 8
+1103 13:12 6
+1103 13:42 35
+1103 13:52 34
+1103 14:02 35
+1103 14:13 7
+1103 14:23 35
+1103 14:33 7
+1103 14:43 9
+1103 14:53 6
+1103 15:24 34
+1103 15:34 7
+1103 15:44 33
+1103 15:54 6
+1103 16:04 22
+1103 16:14 7
+1103 16:45 6
+1103 17:05 7
+1103 17:26 8
+1103 17:36 62
+1103 17:46 6
+1103 17:56 30
+1103 18:06 6
+1103 19:27 0
+1103 19:37 49
+1103 19:47 51
+1103 19:58 52
+1103 20:08 6
+1103 20:28 0
+1103 20:38 46
+1103 20:48 0
+"""
+
+LEER_QUAL = """
+1102 23:00 3
+1103 08:08 0
+1103 09:29 3
+1103 09:39 0
+1103 09:59 3
+1103 10:19 0
+1103 10:40 3
+1103 10:50 0
+1103 11:10 3
+1103 11:20 0
+1103 11:30 3
+1103 11:40 0
+1103 11:51 3
+1103 12:11 0
+1103 12:41 3
+1103 12:51 0
+1103 13:42 3
+1103 14:13 0
+1103 14:23 3
+1103 14:33 0
+1103 14:43 3
+1103 14:53 0
+1103 15:24 3
+1103 15:34 0
+1103 15:44 3
+1103 15:54 0
+1103 16:04 3
+1103 16:14 0
+1103 17:36 3
+1103 17:46 0
+1103 17:56 3
+1103 18:06 0
+1103 19:37 3
+1103 20:08 0
+1103 20:38 3
+1103 20:48 0
+"""
+
 END = datetime(2026, 10, 31, 8, 35)
-STEP = timedelta(minutes=10)
+LEER_END = datetime(2026, 11, 3, 20, 50)
+STEP = timedelta(seconds=608)
 
 
 def parse(block: str) -> list[tuple[datetime, int | None]]:
@@ -268,11 +376,11 @@ def value_at(series: list[tuple[datetime, int | None]], ts: datetime) -> int | N
     return cur
 
 
-def resample(fuell: str, qual: str) -> list[tuple[datetime, int, int]]:
+def resample(fuell: str, qual: str, end: datetime = END) -> list[tuple[datetime, int, int]]:
     fs, qs = parse(fuell), parse(qual)
     ts = fs[0][0]
     out = []
-    while ts <= END:
+    while ts <= end:
         f, q = value_at(fs, ts), value_at(qs, ts)
         if f is not None and q is not None:
             out.append((ts, f, q))
@@ -280,39 +388,127 @@ def resample(fuell: str, qual: str) -> list[tuple[datetime, int, int]]:
     return out
 
 
-def run(name: str, fuell: str, qual: str, show_all: bool) -> None:
-    samples = resample(fuell, qual)
+def run(name: str, fuell: str, qual: str, show_all: bool, end: datetime = END) -> LevelFilter:
+    samples = resample(fuell, qual, end)
     flt = LevelFilter()
-    print(f"\n=== {name}: {len(samples)} Messungen im 10-min-Raster ===")
+    print(f"\n=== {name}: {len(samples)} Messungen ===")
     print(f"{'Zeit':17s} {'roh':>4s} {'Q':>2s} {'Anzeige':>8s}  Status")
     last_line = None
     rejected = 0
     for ts, pct, q in samples:
         disp = flt.update(pct, int(CAPACITY_G * pct / 100), q, ts.timestamp())
         st = flt.state.status
-        if not (st.startswith("ok") or st.startswith("erster")):
+        if st.startswith("unplausibel"):
             rejected += 1
-        line = (disp, st.split(",")[0])
-        if show_all or line != last_line or not st.startswith("ok"):
+        line = (disp, st)
+        if show_all or line != last_line:
             print(f"{ts:%d.%m %H:%M}     {pct:4d} {q:2d} {str(disp):>8s}  {st}")
         last_line = line
-    print(f"-> {rejected} von {len(samples)} Messungen nicht direkt uebernommen; "
+    print(f"-> {rejected} von {len(samples)} Messungen als unplausibel gehalten; "
           f"Endanzeige {flt.display_percent} % / {flt.display_kg} kg, Rohwert zuletzt {samples[-1][1]} %")
+    return flt
+
+
+def feed(flt: LevelFilter, values, start: float, step: float = 608.0, driving: bool = False) -> float:
+    t = start
+    for pct, q in values:
+        flt.update(pct, int(CAPACITY_G * pct / 100), q, t, driving=driving)
+        t += step
+    return t
+
+
+def check() -> int:
+    """Erwartetes Verhalten pruefen. Rueckgabe: Anzahl Fehler."""
+    errors = 0
+
+    def expect(name: str, ok: bool, detail: object = "") -> None:
+        nonlocal errors
+        print(f"{'OK    ' if ok else 'FEHLER'} {name} {detail}")
+        errors += 0 if ok else 1
+
+    # 3.11.: fast leere Flasche, Anzeige darf nie auf die Fehlmessungen springen.
+    flt = LevelFilter()
+    shown = []
+    for ts, pct, q in resample(LEER_FUELL, LEER_QUAL, LEER_END):
+        d = flt.update(pct, int(CAPACITY_G * pct / 100), q, ts.timestamp())
+        if ts >= datetime(2026, 11, 3, 9, 0) and d is not None:
+            shown.append(d)
+    expect("3.11.: Anzeige bleibt zwischen 5 und 10 %", min(shown) >= 5 and max(shown) <= 10,
+           f"min {min(shown)} max {max(shown)}")
+
+    # Echter Flaschenwechsel: wird uebernommen, aber nicht vor 90 Minuten.
+    flt = LevelFilter()
+    t = feed(flt, [(8, 3)] * 8, 0.0)
+    t0 = t
+    steps = 0
+    while flt.display_percent != 100 and steps < 30:
+        t = feed(flt, [(100, 3)], t)
+        steps += 1
+    took = (t - t0) / 60
+    expect("Flaschenwechsel 8 -> 100 % nach 90 bis 130 min",
+           flt.display_percent == 100 and 90 <= took <= 130, f"{took:.0f} min")
+
+    # Drei passende Fehlmessungen in Folge duerfen nichts aendern.
+    flt = LevelFilter()
+    t = feed(flt, [(7, 0)] * 8, 0.0)
+    t = feed(flt, [(35, 3), (34, 3), (35, 3)], t)
+    expect("3 Fehlmessungen in Folge aendern nichts", flt.display_percent == 7, flt.display_percent)
+
+    # Falscher Pegel korrigiert sich selbst nach unten.
+    flt = LevelFilter()
+    t = feed(flt, [(52, 3)] * 5, 0.0)
+    t = feed(flt, [(6, 0)] * 14, t)
+    expect("falscher Pegel 52 % korrigiert sich",
+           flt.display_percent is not None and flt.display_percent <= 8, flt.display_percent)
+
+    # Fahrt: Messungen zaehlen nicht, auch nicht fuer einen neuen Pegel.
+    flt = LevelFilter()
+    t = feed(flt, [(80, 3)] * 6, 0.0)
+    t = feed(flt, [(12, 3)] * 15, t, driving=True)
+    expect("Fahrt haelt den Wert", flt.display_percent == 80 and len(flt.state.votes) <= 6,
+           flt.display_percent)
+
+    # Volle Flasche bleibt bei kurzem Echoausfall stehen.
+    flt = LevelFilter()
+    t = feed(flt, [(100, 3)] * 6, 0.0)
+    t = feed(flt, [(0, 0)] * 6, t)
+    expect("1 h kein Echo aendert die volle Flasche nicht", flt.display_percent == 100,
+           flt.display_percent)
+
+    # Gesicherter Zustand: gleiche Fassung voll, alte Fassung nur Anzeige.
+    flt = LevelFilter()
+    feed(flt, [(40, 3)] * 6, 0.0)
+    again = LevelFilter(FilterState.from_dict(flt.state.as_dict()))
+    expect("Neustart behaelt Pegel und Messungen",
+           again.state.accepted == 40 and len(again.state.votes) == len(flt.state.votes))
+    old = {"accepted": 46.0, "accepted_at": 1.0, "smoothed": 50.8, "display": 51,
+           "capacity_g": 11100, "recent": [46.0]}
+    legacy = LevelFilter(FilterState.from_dict(old))
+    expect("alter Zustand behaelt nur die Anzeige",
+           legacy.state.accepted is None and legacy.display_percent == 51)
+    feed(legacy, [(0, 0), (6, 0), (46, 3), (6, 0), (6, 0)], 0.0)
+    expect("danach Median als Startwert", legacy.display_percent == 6, legacy.display_percent)
+    return errors
 
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--sensor", choices=["links", "rechts"])
+    ap.add_argument("--sensor", choices=["links", "rechts", "leer"])
     ap.add_argument("--all", action="store_true", help="jede Messung ausgeben, nicht nur Aenderungen")
+    ap.add_argument("--check", action="store_true", help="erwartetes Verhalten pruefen")
     a = ap.parse_args(argv)
     try:
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except AttributeError:
         pass
+    if a.check:
+        return 1 if check() else 0
     if a.sensor in (None, "rechts"):
-        run("rechts", RECHTS_FUELL, RECHTS_QUAL, a.all)
+        run("rechts 27.-31.10.", RECHTS_FUELL, RECHTS_QUAL, a.all)
     if a.sensor in (None, "links"):
-        run("links", LINKS_FUELL, LINKS_QUAL, a.all)
+        run("links 27.-31.10.", LINKS_FUELL, LINKS_QUAL, a.all)
+    if a.sensor in (None, "leer"):
+        run("rechts 2.-3.11. fast leer", LEER_FUELL, LEER_QUAL, a.all, LEER_END)
     return 0
 
 

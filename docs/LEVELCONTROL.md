@@ -155,18 +155,37 @@ Zustandswechsel von `sensor.gasflasche_{links,rechts}_fullstand` und `_messquali
 
 ### Filter (`ha/custom_components/truma_levelcontrol/smoothing.py`)
 
-Physik statt Qualität: Zwischen zwei Messungen kann der Füllstand nur um den Verbrauch sinken und nie steigen, außer beim Flaschenwechsel.
+Physik statt Qualität: Zwischen zwei Messungen kann der Füllstand nur um den Verbrauch sinken und nie steigen, außer beim Flaschenwechsel. Die Qualität wird nicht ausgewertet.
 
-1. **Korridor:** `letzter Wert − 6 %/h · Δt − 3 %` bis `letzter Wert + 3 %` → sofort übernommen, Qualität egal (deckt das ±1-%-Rauschen und schwache Echos bei fast leerer Flasche ab). 6 %/h ≈ 0,66 kg/h liegt über Alde-Brenner (0,43 kg/h) plus Kocher.
-2. **Außerhalb, Qualität ≥ 1:** Kandidat. Erst **3 aufeinanderfolgende Messungen** (±3 %) übernehmen den neuen Pegel → Flaschenwechsel oder umgesetzter Sensor wird nach 30 min angezeigt, Einzelausreißer (99 %, 15 %) nie.
-3. **Außerhalb, Qualität 0 („kein Echo"):** letzten Wert halten. Weil der Korridor mit der Zeit nach unten wächst, wird eine echte Leerung trotzdem sichtbar: von 7 % aus ist 0 % nach ~40 min plausibel, von 100 % aus erst nach 16 h.
-4. **Glättung** der übernommenen Werte: Median aus 3 → exponentielle Glättung (α 0,4) → Anzeige ändert sich erst bei ≥ 1 % Abweichung. Das 75/76-Flackern verschwindet, die Anzeige läuft dem Rohwert um ≤ 1 % nach.
+1. **Korridor:** `letzter Wert − 6 %/h · Δt − 3 %` bis `letzter Wert + 3 %` → sofort übernommen. 6 %/h ≈ 0,66 kg/h liegt über Alde-Brenner (0,43 kg/h) plus Kocher.
+2. **Außerhalb des Korridors:** letzten Wert halten. Ein neuer Pegel gilt erst, wenn die Messungen der letzten **2 Stunden** ihn tragen. Gezählt wird die größte Gruppe von Werten innerhalb ±3 %, sie muss mindestens **90 Minuten** überdecken und:
+   - **Anstieg:** mindestens 75 % der Messungen (nur durch Flaschenwechsel möglich, der liefert saubere Werte),
+   - **Rückgang:** mehr als 50 % der Messungen (korrigiert auch einen falsch übernommenen Wert).
+3. **Start:** Median der ersten 5 Messungen. Ein Filterzustand älterer Fassung liefert nur noch den Anzeigewert, bis neu gestartet ist.
+4. **Glättung** der übernommenen Werte: Median aus 3 → exponentielle Glättung (α 0,4) → Anzeige ändert sich erst bei ≥ 1 % Abweichung.
 
-Simulation über die echte Historie: `python tools/levelcontrol_filter_sim.py` (Daten im Skript, 10-min-Raster). Ergebnis: rechts 35 von 490, links ~45 von 494 Messungen nicht direkt übernommen; alle Fahrt-Nullen gehalten, beide Flaschenwechsel am 30.10. (46 % → 100 %) nach 30 min übernommen, kein Ausreißer durchgekommen.
+Bewusste Grenzen:
+
+- Ein echter Flaschenwechsel erscheint erst nach etwa 100 Minuten.
+- Liefert der Sensor im Stand länger als 90 Minuten überwiegend einen niedrigen Wert, etwa 0 % ohne Echo, zeigt der Filter das an. Das ist die sichere Seite: lieber zu wenig Gas anzeigen als zu viel. Während der Fahrt zählt keine Messung.
+- Nach langer Zeit ohne Übernahme ist der Korridor nach unten breit, ein einzelner Fehlwert kann hineinfallen. Er korrigiert sich über Regel 2 wieder.
+
+Simulation über die echte Historie und Verhaltensprüfung:
+
+```
+python tools/levelcontrol_filter_sim.py
+python tools/levelcontrol_filter_sim.py --check
+```
+
+### Fehlmessungen bei fast leerer Flasche (3.11.2026)
+
+Rechte Flasche ohne Wechsel, real etwa 6–7 %. Der Sensor lieferte meist 6–9 % mit Qualität 0, dazwischen Werte wie 40, 35, 22, 62 und 52 % mit Qualität 3, teils drei passende in Folge. Links gab es am 28./29.10. bei 6–8 % dasselbe Muster. Die Ursache ist nicht belegt; vermutlich überlagert bei wenig Flüssigkeit ein Mehrfachecho das eigentliche Signal.
+
+Die erste Filterfassung nahm drei passende Messungen als Flaschenwechsel und zeigte dadurch 35 % und 52 %. Die echten Werte hielt sie danach wegen Qualität 0 für „kein Echo" und verwarf sie. Mit der Mehrheitsregel bleibt die Anzeige auf denselben Daten bei 7–9 %.
 
 ### Entitäten
 
-- `sensor.gasflasche_<seite>_fullstand_geglattet` (%) mit Attributen `status` (ok / kein Echo, halte letzten Wert / unplausibel, Kandidat n/3 / neuer Pegel uebernommen), `letzter_plausibler_rohwert`, `geglaettet`, `kandidat`, `rohwert`, `rohwert_qualitaet`, `flaschengroesse_kg` (aus Gramm/Prozent der Messung, 11,0 kg).
+- `sensor.gasflasche_<seite>_fullstand_geglattet` (%) mit Attributen `status` (ok / unplausibel, halte letzten Wert / neuer Pegel uebernommen / sammle Startwerte / Fahrt erkannt), `letzter_plausibler_rohwert`, `geglaettet`, `kandidat`, `kandidat_anteil`, `messungen_im_zeitraum`, `rohwert`, `rohwert_qualitaet`, `flaschengroesse_kg` (aus Gramm/Prozent der Messung, 11,0 kg).
 - `sensor.gasflasche_<seite>_gasmenge_geglattet` (kg) = geglätteter Füllstand × Flaschengröße.
 - Die Rohsensoren bleiben unverändert. Der Filterzustand wird über HA-Neustarts gesichert (RestoreEntity, extra_restore_state_data).
 - Code-Änderungen eines Custom Components greifen erst nach **HA-Neustart** (Entry-Reload reicht nicht). Deployment: `coordinator.py`, `sensor.py`, `smoothing.py` nach `\\192.168.100.15\config\custom_components\truma_levelcontrol\` kopieren, HA neu starten. Erledigt 31.10.2026 08:51; beide Entitäten erschienen ohne Fehler im Log.
@@ -175,7 +194,7 @@ Simulation über die echte Historie: `python tools/levelcontrol_filter_sim.py` (
 
 Quelle: Eingangsspannung des Orion XS (`sensor.orion_xs_hq242394e7e_eingangsspannung`) über den Victron-GX im Womo (MQTT über WireGuard, 192.168.100.209). Der Eingang hängt an der Starterbatterie; bei laufendem Motor liegt er über 13 V (gemessen 13,4 V bei 49 A Ladestrom). **Fahrt = Spannung > 13,0 V**, Schwelle vom Nutzer festgelegt.
 
-- Während der Fahrt wird jede Messung ignoriert: Anzeige und laufender Kandidat bleiben stehen, Status „Fahrt erkannt, halte letzten Wert". Auch drei gleiche Messungen mit Qualität 3 (z. B. Sensor verrutscht) ersetzen den Wert nicht.
+- Während der Fahrt wird jede Messung ignoriert und zählt auch nicht für einen neuen Pegel, Status „Fahrt erkannt, halte letzten Wert".
 - Der Zeitbezug läuft weiter: nach der Fahrt deckt der Korridor den Verbrauch während der Fahrt ab.
 - Ist die Entität nicht verfügbar (Tunnel zum GX weg) oder nicht numerisch, gilt „keine Fahrt"; dann arbeitet nur der Plausibilitätsfilter wie oben.
 - Die Rohsensoren messen weiter (Vergleich), nur der geglättete Füllstand hält.
