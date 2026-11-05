@@ -139,6 +139,34 @@ Pin 6, Pin 7 frei
 - Gleiches Bild: keine LEDs, kein gültiger Rahmen, dasselbe Muster aus Nullbytes mit UART-Fehlern, etwa 48 pro Sekunde und alle 0,5 s wiederkehrend.
 - Da der ESP nichts sendete, zeigt das vermutlich, was das DMC macht, solange es keinen Bus hört. Nullbytes mit Fehler bedeuten Low-Phasen von mindestens etwa 40 µs. Die RXD-LED des Wandlers blinkte dazu.
 
+## Übersetzung (Schritt 3)
+
+Firmware `esphome/vebus-dmc-bridge.yaml` mit `esphome/vebus_dmc_bridge.h`, gleiche Verdrahtung wie im Werkbanktest. Stand 05.11.2026: kompiliert, nicht geflasht, ungetestet.
+
+- **Zum DMC:** Die Rahmen kommen weiter aus der Aufzeichnung. Den LED-Rahmen `41` erzeugt die Firmware aus dem echten Zustand, den sie jede Sekunde per Modbus TCP vom CCGX liest (192.168.1.242, Unit 246): Register 31 State, 33 Mode, 22 Stromgrenze. Sind die Daten älter als 10 s, bleiben die LEDs aus.
+- **LED-Zuordnung**, abgeleitet aus dem Mitschnitt und nicht vollständig geprüft:
+
+  | State | LEDs |
+  |---|---|
+  | 3 Bulk | Netz + Bulk |
+  | 4 Absorption | Netz + Absorption |
+  | 5 Float | Netz + Float |
+  | 8 Durchleitung | Netz |
+  | 9 Wechselrichter | Wechselrichter |
+  | 10 Assist | Netz + Wechselrichter |
+  | sonst | aus |
+
+  Überlast, Batterie und Temperatur fehlen noch, weil die Register 63–70 am CCGX nur 0 liefern.
+- **Vom DMC:** Ändert sich die Schalterstellung (300 ms stabil) oder die Stromgrenze (1,5 s stabil), schreibt die Firmware **einmal** Register 33 (1 Ladegerät, 3 Ein, 4 Aus) oder Register 22. Die Stromgrenze wird dabei auf 3,1–16,0 A begrenzt. Bei Fehlern gibt es bis zu 5 Versuche im Abstand von 2 s. Der erste Rahmen nach dem Start des DMC oder nach 3 s Pause setzt nur den Ausgangswert und schreibt nichts.
+- **Schreibsperre:** Mit `write_enable: "false"` steht der geplante Befehl nur im Log. Die Freigabe erfolgt erst nach dem Lesetest und durch Rudi.
+- **Versuch `FC 0F`:** Das Format ist vermutlich `FC Nummer 0F von bis` und meldet fehlende Rahmennummern. Am echten Bus folgte darauf `8383 FE .. 38 01 C0 C0`. Die Firmware antwortet ebenso, höchstens alle 200 ms. Ob das die häufigen `FC 0F` beendet, zeigt der Test.
+- **Registerwerte am 05.11.2026, nur gelesen, ohne DMC am Bus:** Grenze 100 (10,0 A, laut Rudi so eingestellt), State 4, Mode 3. Register 22 ist schreibbar laut Victron-Liste, am CCGX aber nicht geprüft.
+
+**Test:**
+1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.
+2. Die LEDs sollten zum MultiPlus passen. Schalter und Knopf erzeugen nur Log-Einträge.
+3. Erst danach `write_enable: "true"` und die Reihe aus `docs/MULTIPLUS-SCHALTER.md`: DMC schaltet, CCGX/VRM/HA schalten, wieder DMC, jeweils LEDs und Zustand prüfen.
+
 ## Unterschied zum Betrieb
 
 Der Mitschnitt hängt am echten VE.Bus. Im geplanten Betrieb (`docs/DMC-RECHERCHE.md`, Abschnitt Vorgehen) kommt das DMC vom VE.Bus ab und bekommt ein **eigenes Kabel zum ESP**. Der ESP spielt dem DMC gegenüber den MultiPlus und schaltet den echten MultiPlus per WLAN über den GX. **Gesendet wird also nur zum DMC, nicht auf den VE.Bus.** Das alles ist noch ein Plan, ob das DMC damit läuft, klärt erst der Werkbanktest.
