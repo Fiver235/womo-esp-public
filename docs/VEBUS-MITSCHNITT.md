@@ -125,7 +125,12 @@ Pin 6, Pin 7 frei
 
 - **DMC an 8,5 V:** etwa 70 mA, also rund 0,6 W. Die Ampere-Anzeige erscheint und folgt dem Drehknopf, die LEDs bleiben aus. In der Schalterstellung Aus bleibt das DMC trotz anliegender Spannung ganz aus, bis der Schalter betätigt wird (Angaben Rudi).
 - **Empfang:** kein gültiger Rahmen vom DMC. Es kommen nur Nullbytes, jedes mit UART-Fehler, das heißt die Leitung liegt am Empfänger immer wieder lange auf Low. Das begann erst mit dem Einschalten des DMC. Vorher waren es 0 Bytes.
-- **Deutung, nicht bewiesen:** Mit R14 liegt die Leitung im Ruhezustand nahe 0 V Differenz, sodass beide Empfänger keinen festen Pegel sehen. Auf dem echten Bus fiel das nicht auf. Als Nächstes R14 ausbauen und wiederholen.
+
+**Zweiter Lauf 05.11.2026, ohne R14 (`logs/vebus-20261105-184523.log`, lokal):**
+
+- Gleiches Bild: keine LEDs, kein gültiger Rahmen, dasselbe Muster aus Nullbytes mit UART-Fehlern, etwa 48 pro Sekunde und alle 0,5 s wiederkehrend. **R14 war also nicht die alleinige Ursache,** die Vermutung aus dem ersten Lauf ist widerlegt.
+- Das Muster beginnt mit dem Einschalten des DMC, stammt also vermutlich von ihm. Nullbytes mit Fehler bedeuten Low-Phasen von mindestens etwa 40 µs. Das DMC sendet also etwas, das bei 256.000 Baud nicht lesbar ist. Warum, ist offen.
+- **Noch nicht geprüft:** ob die Rahmen des ESP überhaupt sauber auf der Leitung ankommen. Hauptverdacht ist die automatische Richtungsumschaltung des Wandlers: Hält sie den Sender nach einem Null-Bit länger als ein Bit an, kann sie bei 256.000 Baud keine Einsen mehr erzeugen. Das ließe sich mit einem Oszilloskop oder einem zweiten Wandler als Empfänger prüfen. Ebenfalls ungeprüft: ob das DMC mehr braucht als die Rahmen des MultiPlus, etwa die Pins 6 und 7 oder die Rahmen des CCGX.
 
 ## Unterschied zum Betrieb
 
