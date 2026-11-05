@@ -126,6 +126,7 @@ Pin 6, Pin 7 frei
 - **LEDs:** Mains On und Bulk leuchten. Das entspricht `LED=05` in den abgespielten Rahmen `41`. Der unveränderte Wandler mit automatischer Umschaltung reicht also für dieses Ergebnis, der große Umbau ist vorerst nicht nötig.
 - **Rahmen vom DMC:** `F0F7 FE 40 1A A0 00`, also Schalter Ein und 16,0 A, keine UART-Fehler. 48 von 1487 Rahmen in 15 s waren fehlerhaft. Viele davon sehen nach Überschneidungen mit den Sendungen des ESP aus, geprüft ist das nicht.
 - **Noch anders als am echten Bus:** Das DMC sendet `FC 0F` etwa alle 16 ms und `40` etwa alle 27 ms statt alle 500 ms. Vermutlich wartet es auf eine Antwort, die in der festen Aufzeichnung fehlt. Das ist noch nicht geklärt.
+- **Knopf und Schalter (`logs/vebus-20261105-191007.log`, lokal):** Stromgrenze und Schalterstellung kommen im Rahmen `40` beim ESP an, mit denselben Werten wie am echten Bus, auch die `00 00` am Anschlag. Bei Schalter Aus bleiben LEDs und Anzeige an (Angabe Rudi), weil Versorgung und Rahmen weiterlaufen. Die Firmware spielt weiter eine feste Aufzeichnung ab, sie reagiert nicht auf das DMC.
 - **Offen:** ob R14 stört, wurde nie gültig getestet. Er bleibt am Modul draußen.
 
 **Erster Lauf 05.11.2026, mit R14, TXD falsch an P14 (`logs/vebus-20261105-182957.log`, lokal):**
