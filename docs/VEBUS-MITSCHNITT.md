@@ -69,7 +69,7 @@ Für den Mitschnitt reicht das so. Zum Senden muss das Modul umgebaut werden, si
 
 Entscheidung Rudi 05.11.2026: Dieses Modul bleibt auch für den Betrieb, es sind mehrere vorhanden. Der Umbau ist ein Plan und noch nicht erprobt. Er setzt die unten geprüfte Schaltung voraus.
 
-**Warum unverändert nicht:** Bei diesen Modulen liegt der Dateneingang DI üblicherweise fest auf GND, und der CD4069 steuert aus dem Datensignal nur die Richtung. Eine 0 wird aktiv getrieben, bei einer 1 schaltet der Treiber ab und nur Pull-Widerstände ziehen den Bus zurück. Bei 256 kBaud dauert ein Bit 3,9 µs. Mit 4,7 kΩ wäre das vermutlich zu langsam, und kleinere Pull-Widerstände würden den Bus dauerhaft belasten. Nach dem Umbau treibt der MAX485 beide Pegel selbst, die Pull-Widerstände und R14 bleiben entfernt.
+**Warum unverändert nicht:** Bei diesen Modulen liegt der Dateneingang DI üblicherweise fest auf GND, und der CD4069 steuert aus dem Datensignal nur die Richtung. Eine 0 wird aktiv getrieben, bei einer 1 schaltet der Treiber ab und nur Pull-Widerstände ziehen den Bus zurück. Bei 256 kBaud dauert ein Bit 3,9 µs. Mit 4,7 kΩ wäre das vermutlich zu langsam, und kleinere Pull-Widerstände würden den Bus dauerhaft belasten. Nach dem Umbau treibt der MAX485 beide Pegel selbst. Ob die Pull-Widerstände am Betriebsmodul trotzdem nötig sind, klärt der Betriebsabschnitt unten.
 
 Den Umbau zuerst an einem zweiten Modul machen. Das unveränderte Modul bleibt für den Mitschnitt und als Reserve.
 
@@ -86,8 +86,24 @@ Ausgang des Moduls      ── GPIO16 ESP32 wie beim Mitschnitt
 ```
 
 - **Versorgung:** bleibt bei 5 V wie im Mitschnitt, der Teiler am Modulausgang auch. GPIO17 und GPIO4 brauchen keinen Teiler, die Eingänge des MAX485 erkennen 3,3 V laut Datenblatt als High (ab 2,0 V).
-- **Gefahr:** Bleibt der Treiber dauerhaft an, blockiert er den ganzen VE.Bus. Deshalb der Pull-down, dazu in der Firmware eine hardwaregesteuerte Umschaltung (RS485-Modus des UART) und eine Sperre gegen Dauersenden.
+- **Dauersenden verhindern:** Bleibt der Treiber dauerhaft an, blockiert er die Leitung. Deshalb der Pull-down, dazu in der Firmware eine hardwaregesteuerte Umschaltung (RS485-Modus des UART) und eine Sperre gegen Dauersenden.
 - **Mitschnitt mit umgebautem Modul:** Die jetzige Firmware steuert GPIO4 und GPIO17 nicht an, der Pull-down hält den Treiber aus. Das umgebaute Modul hört also ebenfalls nur zu.
+
+## Unterschied zum Betrieb
+
+Der Mitschnitt hängt am echten VE.Bus. Im geplanten Betrieb (`docs/DMC-RECHERCHE.md`, Abschnitt Vorgehen) kommt das DMC vom VE.Bus ab und bekommt ein **eigenes Kabel zum ESP**. Der ESP spielt dem DMC gegenüber den MultiPlus und schaltet den echten MultiPlus per WLAN über den GX. **Gesendet wird also nur zum DMC, nicht auf den VE.Bus.** Das alles ist noch ein Plan, ob das DMC damit läuft, klärt erst der Werkbanktest.
+
+| | Mitschnitt | Betrieb |
+|---|---|---|
+| A+ und B− | VE.Bus Pin 4 und 5 | Pin 4 und 5 des DMC-Kabels |
+| 12 V für Abwärtswandler | VE.Bus Pin 2 und 3 | offen, siehe unten |
+| Versorgung des DMC | aus dem VE.Bus | muss der Aufbau liefern: 12 V an Pin 2 und 3 des DMC-Kabels |
+| Abwärtswandler, Diode, Elkos, 5 V, Teiler, GPIO16 | wie oben | unverändert |
+| GPIO17, GPIO4, Pull-down | frei | laut „Umbau zum Senden“ |
+
+- **Quelle der 12 V offen:** Entweder nur Pin 2 und 3 einer VE.Bus-Buchse oder abgesichertes Bordnetz. Der ESP muss den MultiPlus auch einschalten können, also auch im Aus-Zustand laufen. Dafür zuerst V+ im Aus-Zustand messen (Aktion 4 unten). Bei Bordnetz keine Verbindung zu VE.Bus-Pin 3 herstellen, solange die Massen nicht geprüft sind.
+- **R14 am Betriebsmodul:** entfernen. Die kurze Leitung zum DMC braucht vermutlich keinen Abschluss, und er würde den Sendestrom deutlich erhöhen.
+- **R11 und R12 am Betriebsmodul vorerst drauflassen:** Auf der eigenen Leitung hält sonst niemand den Ruhepegel, wenn weder ESP noch DMC senden. Ob die Pull-Widerstände nötig sind, zeigt der Werkbanktest.
 
 ## Reicht die Leistung?
 
