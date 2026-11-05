@@ -162,6 +162,21 @@ Firmware `esphome/vebus-dmc-bridge.yaml` mit `esphome/vebus_dmc_bridge.h`, gleic
 - **Versuch `FC 0F`:** Das Format ist vermutlich `FC Nummer 0F von bis` und meldet fehlende Rahmennummern. Am echten Bus folgte darauf `8383 FE .. 38 01 C0 C0`. Die Firmware antwortet ebenso, höchstens alle 200 ms. Ob das die häufigen `FC 0F` beendet, zeigt der Test.
 - **Registerwerte am 05.11.2026, nur gelesen, ohne DMC am Bus:** Grenze 100 (10,0 A, laut Rudi so eingestellt), State 4, Mode 3. Register 22 ist schreibbar laut Victron-Liste, am CCGX aber nicht geprüft.
 
+**Lesetest 05.11.2026 mit `write_enable: "false"`, Ergebnis:**
+
+- **LEDs:** Mains On und Absorption leuchten, passend zu State 4 am CCGX (Rudi).
+- **Ampere-Anzeige:** Sie zeigt die Stellung des Knopfs (16 A), nicht die 10,0 A aus dem Rahmen `41`. Die Anzeige folgt also dem Knopf.
+- **Befehle laut Log, Uhrzeiten aus dem Log:**
+
+  | Uhrzeit | Handgriff | Geplanter Befehl |
+  |---|---|---|
+  | 20:47:34 | Knopf auf 14,0 A | Register 22 = 140, 1,5 s später |
+  | 20:47:37 | Schalter Aus | Register 33 = 4 |
+  | 20:47:41 | Schalter Ein | Register 33 = 3 |
+
+  Es wurde nichts geschrieben, und die Werte stimmen mit den Handgriffen überein.
+- **Störungen:** `FC 0F` kommt weiter etwa 90-mal pro Sekunde, die Antwort `38` ändert daran nichts. Zeitweise sendet das DMC abgebrochene Rahmen, die mitten im Rahmen neu beginnen. Das sieht nach Kollisionen mit den Rahmen des ESP aus. Gültige Rahmen `40` kommen trotzdem regelmäßig an. Beides ist für den Dauerbetrieb noch zu klären.
+
 **Test:**
 1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.
 2. Die LEDs sollten zum MultiPlus passen. Schalter und Knopf erzeugen nur Log-Einträge.
