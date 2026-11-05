@@ -178,10 +178,11 @@ Mitschnitt `logs/vebus-20261105-171337.log` (lokal, nicht im Repo), etwa 8 Minut
 - **Zähler:** 58.154 Rahmen, davon 21.226 Sync und 10 mit Prüfsummenfehler, keine Überläufe.
 - **Rahmen `00 FB xx`:** Genau diese 10 kurzen Rahmen werden als Fehler gezählt, sie kommen nur rund um Zustandswechsel vor. Die Summe aller Bytes vor `FF` ist immer `0x17A`, das spricht für ein festes Muster. In derselben Zeit stieg der UART-Fehlerzähler ebenfalls um 10. Ob es echte Rahmen oder Empfangsfehler sind, ist offen. Alle übrigen Rahmen hatten keine Prüfsummenfehler.
 
+**Ohne DMC:** Der CCGX kann den MultiPlus ohne DMC am VE.Bus beliebig schalten (von Rudi geprüft, Angabe vom 05.11.2026). Damit ist die Grundlage des Umbaus bestätigt. Ein Mitschnitt dieses Zustands liegt nicht vor.
+
 **Noch offen:**
 - R14 ausbauen und vergleichen.
 - Start des DMC mitschneiden (Punkt 6 oben).
-- Prüfen, ob der Bus ohne DMC weiterläuft, wenn der GX den MultiPlus ausschaltet.
 - Für Schritt 2: wie der ESP dem DMC „Aus" darstellt und ob das DMC dauerhafte Versorgung im Aus-Zustand verträgt, denn am echten MultiPlus verliert es sie.
 
 ## Stand
