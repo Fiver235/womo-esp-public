@@ -16,7 +16,7 @@
 substitutions:
   name: vebus-sniffer
   friendly_name: "VE.Bus Sniffer"
-  rx_pin: "16"              # GPIO16 <- Modulausgang ueber Teiler 1k/2k (5 V -> 3,3 V)
+  rx_pin: "16"              # GPIO16 <- Modulausgang (Modul an 3,3 V; bei 5 V nur ueber Teiler 1k/2k)
 
 esphome:
   name: ${name}
