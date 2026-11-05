@@ -157,8 +157,8 @@ Die Dekodierung von 0x40 und 0x41 stammt aus dem MK2-Dokument und der ve.bus-lib
 
 | Punkt | Stand 05.11.2026 |
 |---|---|
-| Firmware `esphome/vebus-sniffer.yaml`, `esphome/vebus_sniffer.h` | kompiliert mit WireGuard, noch auf keinem ESP |
+| Firmware `esphome/vebus-sniffer.yaml`, `esphome/vebus_sniffer.h` | per USB geflasht (COM9), startet, TCP-Stream läuft; noch ohne Busdaten |
 | `tools/vebus_capture.py` | Selbsttest OK: echte Beispielrahmen aus esp32ess, TCP-Strecke mit Testserver, Wiederverbinden |
 | Versorgung | Mitschnitt von der Powerbank. V+ gemessen 9,0 V ohne DMC, Probe unter Last offen |
-| WireGuard 192.168.100.210 | Peer in der Fritzbox angelegt, Handshake noch ungetestet; der Tunnel kostet zusätzlich etwas Strom |
+| WireGuard 192.168.100.210 | Peer in der Fritzbox angelegt, Handshake im Log erfolgreich (05.11.2026, WLAN WDS6G) |
 | Mitschnitt an der Anlage | offen, Hardware fehlt noch |
