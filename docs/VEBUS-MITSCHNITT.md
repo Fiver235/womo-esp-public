@@ -121,6 +121,12 @@ Pin 6, Pin 7 frei
   4. Mitschnitt mit `tools/vebus_capture.py` starten, dann das Labornetzteil einschalten.
 - **Zurück:** `vebus-sniffer.yaml` flashen, TXD wieder an VCC und das DMC wieder an den VE.Bus.
 
+**Erster Lauf 05.11.2026, mit R14 (`logs/vebus-20261105-182957.log`, lokal):**
+
+- **DMC an 8,5 V:** etwa 70 mA, also rund 0,6 W. Die Ampere-Anzeige erscheint und folgt dem Drehknopf, die LEDs bleiben aus. In der Schalterstellung Aus bleibt das DMC trotz anliegender Spannung ganz aus, bis der Schalter betätigt wird (Angaben Rudi).
+- **Empfang:** kein gültiger Rahmen vom DMC. Es kommen nur Nullbytes, jedes mit UART-Fehler, das heißt die Leitung liegt am Empfänger immer wieder lange auf Low. Das begann erst mit dem Einschalten des DMC. Vorher waren es 0 Bytes.
+- **Deutung, nicht bewiesen:** Mit R14 liegt die Leitung im Ruhezustand nahe 0 V Differenz, sodass beide Empfänger keinen festen Pegel sehen. Auf dem echten Bus fiel das nicht auf. Als Nächstes R14 ausbauen und wiederholen.
+
 ## Unterschied zum Betrieb
 
 Der Mitschnitt hängt am echten VE.Bus. Im geplanten Betrieb (`docs/DMC-RECHERCHE.md`, Abschnitt Vorgehen) kommt das DMC vom VE.Bus ab und bekommt ein **eigenes Kabel zum ESP**. Der ESP spielt dem DMC gegenüber den MultiPlus und schaltet den echten MultiPlus per WLAN über den GX. **Gesendet wird also nur zum DMC, nicht auf den VE.Bus.** Das alles ist noch ein Plan, ob das DMC damit läuft, klärt erst der Werkbanktest.
