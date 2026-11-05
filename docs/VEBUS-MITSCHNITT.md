@@ -8,14 +8,14 @@ Ziel: Welche Rahmen sendet das DMC, welche des MultiPlus wertet es aus, und in w
 
 - ESP32-Entwicklungsboard (esp32dev)
 - Rudis RS485-Modul „RS485 to TTL“ (MAX485 CSA, CD4069, automatische Richtungsumschaltung, Pins VCC/TXD/RXD/GND), vorbereitet wie im Abschnitt „RS485-Modul vorbereiten“
-- Nur für den 5-V-Rückfall: Spannungsteiler 1 kΩ und 2 kΩ
+- Spannungsteiler für den Datenausgang: 1 kΩ und 2 kΩ
 - Anschluss an den Bus, eines von beiden:
   - eine **freie VE.Bus-Buchse** an MultiPlus oder CCGX mit einem aufgeschnittenen Netzwerkkabel. Die zwei Buchsen sind jeweils parallel.
   - ein T-Adapter mit **allen 8 Adern parallel**. Kein „Splitter", der Adernpaare auf zwei Buchsen aufteilt.
 - Für die Versorgung aus dem VE.Bus (Entscheidung Rudi 05.11.2026):
-  - Abwärtswandler, einstellbar, Eingang ab 4,5 V, z. B. MP1584, **vor dem Anschluss ohne Last auf 3,3 V eingestellt**
+  - Abwärtswandler, einstellbar, Eingang ab 4,5 V, z. B. MP1584, **vor dem Anschluss ohne Last auf 5,0 V eingestellt**
   - Schottky-Diode, z. B. 1N5819, in Reihe in der V+-Leitung
-  - Elko 220 µF hinter der Diode, Elko 470–1000 µF am 3V3-Pin des ESP. Die WLAN-Spitzen kann V+ nicht liefern.
+  - Elko 220 µF, mindestens 25 V, hinter der Diode. Elko 470–1000 µF, mindestens 6,3 V, besser 10 V, am 5V-Pin des ESP. Die WLAN-Spitzen kann V+ nicht liefern.
   - Widerstand 270 Ω, mindestens 1 W, für die Belastungsprobe
 
 ## RJ45-Belegung des VE.Bus
@@ -36,19 +36,18 @@ Aus dem Victron-Schaltplan `VE_BBB_Cape_v0.80`, Seite 2, Stecker CN200/CN201. Da
 ## Verdrahtung
 
 ```text
-VE.Bus Pin 4 (A) ─── A+  RS485-Modul  Ausgang ── GPIO16 ESP32
-VE.Bus Pin 5 (B) ─── B−               Eingang ── VCC
-          3. Klemme (接大地) frei      VCC ─── 3,3 V
+VE.Bus Pin 4 (A) ─── A+  RS485-Modul  Ausgang ── 1 kΩ ──┬── GPIO16 ESP32
+VE.Bus Pin 5 (B) ─── B−               Eingang ── VCC    2 kΩ
+          3. Klemme (接大地) frei      VCC ─── 5 V       └── GND
                                       GND ─── GND
 
-VE.Bus Pin 2 (V+) ──►|── 1N5819 ──┬── IN+  Abwärtswandler  OUT+ ──┬── 3V3-Pin ESP32, VCC Modul
-                               220 µF      auf 3,3 V eingestellt  1000 µF
+VE.Bus Pin 2 (V+) ──►|── 1N5819 ──┬── IN+  Abwärtswandler  OUT+ ──┬── 5V-Pin ESP32, VCC Modul
+                               220 µF      auf 5,0 V eingestellt  1000 µF
 VE.Bus Pin 3 (GND) ───────────────┴── IN−                  OUT− ──┴── GND ESP32, GND Modul
 ```
 
-- Die 3,3 V gehen direkt an den 3V3-Pin: Das umgeht den Längsregler des Boards, und der Modulausgang passt ohne Spannungsteiler zum ESP.
-- **3,3 V sind ein Versuch:** Der Händler gibt 3,3–5 V an, das Datenblatt eines echten MAX485 nur 4,75–5,25 V. Beim reinen Empfang ist der Versuch unkritisch. Ob es läuft, zeigen die Zähler: 50 Sync pro Sekunde, keine UART- und keine Prüfsummenfehler.
-- **Rückfall 5 V**, falls die Zähler Fehler zeigen: Wandler auf 5,0 V an den 5V-Pin des ESP und an VCC des Moduls, Ausgang über 1 kΩ an GPIO16, GPIO16 über 2 kΩ an GND. Der Teiler ist dann Pflicht, die GPIOs vertragen nur 3,3 V.
+- **5 V für Test und Betrieb** (Entscheidung Rudi 05.11.2026): Das liegt im Datenblatt des MAX485 (4,75–5,25 V), und die Versorgung bleibt für das spätere Senden gleich. Der 3V3-Pin des ESP bleibt frei.
+- **Spannungsteiler ist Pflicht:** Der Modulausgang liefert bis zu 5 V, die GPIOs vertragen nur 3,3 V. Bei versorgtem Modul und offenem A+/B− an GPIO16 messen: etwa 3,3 V erwartet. Über ca. 3,4 V ESP nicht anschließen. Unter 2,5 V erkennt der ESP kein sicheres High, dann erst die Ursache klären.
 - **Nicht senden können:** Der Dateneingang des Moduls liegt fest an VCC, dadurch bleibt der Sender aus. Die Firmware weist dem UART zusätzlich keinen TX-Pin zu.
 - Die dritte Klemme (接大地 = an Erde anschließen) bleibt frei. Sie führt nur zu den Schutzdioden.
 - **Keine zweite Verbindung:** Die Schaltung hängt nur an der Masse des VE.Bus. Pin 3 ist die Masse der VE.Bus-Schnittstelle, im GX ist sie galvanisch vom Rest getrennt (Si8641). Wie sie im MultiPlus zum Batterie-Minus liegt, ist nicht dokumentiert. Deshalb keine Verbindung zum Bordnetz, und **USB nie gleichzeitig mit dem VE.Bus**. Nach dem ersten Flashen läuft alles per WLAN.
@@ -62,7 +61,7 @@ Alles ohne Busanschluss und ohne ESP:
 
 1. **R14 entfernen,** das ist der 120-Ω-Abschluss. Zwischen A+ und B− darf stromlos danach kein kleiner Widerstand mehr messbar sein, mehr als 10 kΩ.
 2. **Pull-Widerstände suchen:** Stromlos messen von A+ nach VCC, von A+ nach GND, von B− nach VCC und von B− nach GND. Liegt ein Wert unter etwa 100 kΩ, führt er vermutlich über R11 oder R12. Den betreffenden Widerstand entfernen und erneut messen.
-3. **Eingang und Ausgang bestimmen:** Das Modul mit 3,3 V versorgen, A+ und B− offen. TXD und RXD nacheinander über 10 kΩ gegen GND legen und die Spannung am Pin messen. Bleibt sie bei etwa 3,3 V, ist der Pin der **Ausgang**, er kommt an GPIO16. Sinkt sie deutlich, ist er der **Eingang**, er kommt fest an VCC. Die Beschriftung TXD/RXD ist bei diesen Modulen uneinheitlich, deshalb messen.
+3. **Eingang und Ausgang bestimmen:** Das Modul mit 5 V versorgen, A+ und B− offen. TXD und RXD nacheinander über 10 kΩ gegen GND legen und die Spannung am Pin messen. Bleibt sie bei etwa 5 V, ist der Pin der **Ausgang**, er kommt an den Spannungsteiler. Sinkt sie deutlich, ist er der **Eingang**, er kommt fest an VCC. Die Beschriftung TXD/RXD ist bei diesen Modulen uneinheitlich, deshalb messen.
 
 Für den Mitschnitt reicht das so. Zum Senden muss das Modul umgebaut werden, siehe nächster Abschnitt.
 
@@ -86,7 +85,7 @@ MAX485 Pin 2+3          ── 10 kΩ ── GND   Pflicht: Treiber bleibt aus, 
 Ausgang des Moduls      ── GPIO16 ESP32 wie beim Mitschnitt
 ```
 
-- **Versorgung:** Der MAX485 ist nur für 4,75–5,25 V spezifiziert, und beim Senden hängt der Pegel auf dem Bus direkt von VCC ab. Zum Senden deshalb die 5-V-Variante: Wandler auf 5,0 V an den 5V-Pin des ESP und an VCC des Moduls, Ausgang über den Teiler 1 kΩ / 2 kΩ an GPIO16. GPIO17 und GPIO4 brauchen keinen Teiler, die Eingänge des MAX485 erkennen 3,3 V laut Datenblatt als High (ab 2,0 V).
+- **Versorgung:** bleibt bei 5 V wie im Mitschnitt, der Teiler am Modulausgang auch. GPIO17 und GPIO4 brauchen keinen Teiler, die Eingänge des MAX485 erkennen 3,3 V laut Datenblatt als High (ab 2,0 V).
 - **Gefahr:** Bleibt der Treiber dauerhaft an, blockiert er den ganzen VE.Bus. Deshalb der Pull-down, dazu in der Firmware eine hardwaregesteuerte Umschaltung (RS485-Modus des UART) und eine Sperre gegen Dauersenden.
 - **Mitschnitt mit umgebautem Modul:** Die jetzige Firmware steuert GPIO4 und GPIO17 nicht an, der Pull-down hält den Treiber aus. Das umgebaute Modul hört also ebenfalls nur zu.
 
@@ -96,10 +95,10 @@ V+ ist keine feste Spannungsquelle. esp32ess hat an einem anderen MultiPlus geme
 
 | Grobe Abschätzung, nicht gemessen | Leistung aus V+ |
 |---|---|
-| ESP32 bei 80 MHz mit Modem-Sleep, im Mittel ca. 50–70 mA an 3,3 V | ca. 0,2–0,25 W |
+| ESP32 bei 80 MHz mit Modem-Sleep, im Mittel ca. 50–70 mA an 5 V über den Längsregler des Boards | ca. 0,25–0,35 W |
 | RS485-Modul | ca. 0,01–0,02 W |
 | Wandlerverluste, ca. 80 % Wirkungsgrad | ca. 0,1 W |
-| **Summe im Mittel** | **ca. 0,3–0,4 W**, Spitzen beim Senden puffern die Elkos |
+| **Summe im Mittel** | **ca. 0,35–0,45 W**, Spitzen beim Senden puffern die Elkos |
 
 **Belastungsprobe vor dem Anschluss der Schaltung:** An der VE.Bus-Buchse, alles im Normalbetrieb, DMC und GX angeschlossen:
 
@@ -113,7 +112,7 @@ Das Anstecken lädt den 220-µF-Elko und zieht V+ für einige Millisekunden heru
 
 ## Inbetriebnahme
 
-1. ESP per USB flashen, noch **ohne** Bus und ohne Abwärtswandler am 3V3-Pin:
+1. ESP per USB flashen, noch **ohne** Bus und ohne Abwärtswandler am 5V-Pin:
 
    ```bash
    .\.venv\Scripts\esphome.exe run esphome\vebus-sniffer.yaml --device COMx
