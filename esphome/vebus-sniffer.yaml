@@ -1,0 +1,62 @@
+# ===========================================================================
+# Eigener ESP32: passiver VE.Bus-Mitschnitt fuer das Digital Multi Control (DMC)
+#
+# Hoert am VE.Bus nur zu und streamt jeden Rahmen per TCP (Port 8484) an
+# tools/vebus_capture.py. Diese Firmware KANN nicht senden: Der UART hat keinen
+# TX-Pin, am RS485-Modul liegen DE und RE fest auf GND.
+# Verdrahtung und Ablauf: docs/VEBUS-MITSCHNITT.md
+#
+# Erstes Flashen per USB, danach OTA:
+#   .\.venv\Scripts\esphome.exe run esphome\vebus-sniffer.yaml --device COMx
+# ===========================================================================
+
+substitutions:
+  name: vebus-sniffer
+  friendly_name: "VE.Bus Sniffer"
+  rx_pin: "16"              # GPIO16 <- RO des RS485-Moduls
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - vebus_sniffer.h
+  on_boot:
+    priority: -100          # nach dem Netzwerk-Stack
+    then:
+      - lambda: vebus_sniffer::start(${rx_pin});
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+  baud_rate: 115200
+
+api:
+  encryption:
+    key: !secret sniffer_api_encryption_key
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret sniffer_api_encryption_key
+
+# Noch per DHCP: Adresse steht im USB-Log, Name vebus-sniffer.local per mDNS.
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 0s
+  power_save_mode: none     # sonst Verzoegerungen im TCP-Stream
+  ap:
+    ssid: "VEBus-Sniffer Fallback"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+interval:
+  - interval: 30s
+    then:
+      - lambda: vebus_sniffer::log_stats();

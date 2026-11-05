@@ -36,7 +36,7 @@ Folge: Am echten VE.Bus kann das DMC nicht bleiben, wenn der GX schalten soll.
 - Der MultiPlus sendet **alle 20 ms einen Sync-Rahmen** (`83 83 FD <Nr> 55 … FF`); andere Teilnehmer senden in Zeitfenstern danach (ve.bus-library: 8,0–9,5 ms nach Sync).
 - Datenrahmen `<Adresse 2 Byte> FE <Nr> <Befehl> … <Prüfsumme> FF`, Byte-Stuffing für 0xFA–0xFF, 8-Bit-Prüfsumme. Adresse 0x8383 = MultiPlus, 0x98F7 = MK3.
 - Versorgung im RJ45: rund **12 V, max. ca. 700 mW** vom MultiPlus (gemessen 11,65 V, ca. 39 Ω Innenwiderstand) [5].
-- **Pinbelegung widersprüchlich** zwischen den Quellen (esp32ess: Pin 2 = +12 V, 3 = GND, 4 = A, 5 = B; ve.bus-library: A = 3, B = 4, GND = 5). Vor dem Anschluss mit dem Victron-Schaltplan [7] und Messgerät klären.
+- **Pinbelegung laut Victron-Schaltplan [7], Seite 2:** 1 frei, 2 V+, 3 GND, 4 A, 5 B, 6 Standby, 7 Panel Detect, 8 frei. esp32ess stimmt damit überein, die Angabe A = 3, B = 4, GND = 5 in der ve.bus-library nicht.
 
 **Nicht gefunden:** Ein Projekt, das gegenüber einem DMC den MultiPlus nachbildet. Alle Projekte sprechen *mit* dem MultiPlus, nicht *als* MultiPlus.
 
@@ -59,12 +59,12 @@ DMC ──RJ45/RS485 (eigenes Kabel)── ESP32 ──WLAN/Modbus TCP── Col
 2. **Werkbank:** DMC an eigenem Kabel am ESP, 12 V über abgesicherte Leitung, ESP sendet Sync + mitgeschnittene MultiPlus-Rahmen. Prüfen, ob das DMC ohne Fehleranzeige läuft und LEDs/Display reagieren.
 3. Übersetzung DMC ↔ Modbus, Einbau, Testplan aus `MULTIPLUS-SCHALTER.md`.
 
-**Hardware:** RS485-Transceiver für 3,3 V und 256 kBaud (z. B. MAX3485/SP3485; Abschluss- und Bias-Widerstände auf dem Modul entfernen, laut [5, 6]), RJ45-Verteiler oder -Breakout. Für Schritt 1 genügt der Proxy-ESP (freier UART, nur Empfang). Für Schritt 2/3 besser ein **eigener ESP32**: Er muss als Takt-Geber alle 20 ms pünktlich senden, das verträgt sich schlecht mit Bluetooth-Proxy und WLAN auf demselben Chip.
+**Hardware:** Entscheidung Rudi 05.11.2026: **eigener neuer ESP32** für alle Schritte, der Proxy bleibt unberührt. Dazu RS485-Transceiver für 3,3 V und 256 kBaud (z. B. MAX3485/SP3485; Abschluss- und Bias-Widerstände auf dem Modul entfernen, laut [5, 6]) und ein RJ45-Anschluss. Verdrahtung und Ablauf von Schritt 1: `docs/VEBUS-MITSCHNITT.md`.
 
 ### Risiken
 
 - Das DMC erwartet eventuell mehr als Sync und 0x41 (Geräteabfrage, Versionsrahmen); dann muss mehr nachgebildet werden. Klärt Schritt 1.
-- Falsche Pinbelegung kann ESP oder DMC beschädigen; daher erst messen.
+- Falsche Verdrahtung kann ESP oder DMC beschädigen; daher trotz Schaltplan erst messen. Die Masse der VE.Bus-Schnittstelle nicht ungeprüft mit dem Bordnetz verbinden.
 - Firmware-Änderungen von Victron können das Verhalten ändern (kein offizielles Protokoll).
 
 ## 5. Vergleich
