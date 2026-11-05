@@ -121,16 +121,22 @@ Pin 6, Pin 7 frei
   4. Mitschnitt mit `tools/vebus_capture.py` starten, dann das Labornetzteil einschalten.
 - **Zurück:** `vebus-sniffer.yaml` flashen, TXD wieder an VCC und das DMC wieder an den VE.Bus.
 
-**Erster Lauf 05.11.2026, mit R14 (`logs/vebus-20261105-182957.log`, lokal):**
+**Dritter Lauf 05.11.2026: Das DMC antwortet.** Bei den beiden ersten Läufen steckte TXD versehentlich an P14 statt an P17, der ESP hat also nichts auf die Leitung gegeben. Ihre Deutungen zu R14 und zur Richtungsumschaltung sind damit hinfällig. Mit TXD an P17 und ohne R14 gilt:
+
+- **LEDs:** Mains On und Bulk leuchten. Das entspricht `LED=05` in den abgespielten Rahmen `41`. Der unveränderte Wandler mit automatischer Umschaltung reicht also für dieses Ergebnis, der große Umbau ist vorerst nicht nötig.
+- **Rahmen vom DMC:** `F0F7 FE 40 1A A0 00`, also Schalter Ein und 16,0 A, keine UART-Fehler. 48 von 1487 Rahmen in 15 s waren fehlerhaft. Viele davon sehen nach Überschneidungen mit den Sendungen des ESP aus, geprüft ist das nicht.
+- **Noch anders als am echten Bus:** Das DMC sendet `FC 0F` etwa alle 16 ms und `40` etwa alle 27 ms statt alle 500 ms. Vermutlich wartet es auf eine Antwort, die in der festen Aufzeichnung fehlt. Das ist noch nicht geklärt.
+- **Offen:** ob R14 stört, wurde nie gültig getestet. Er bleibt am Modul draußen.
+
+**Erster Lauf 05.11.2026, mit R14, TXD falsch an P14 (`logs/vebus-20261105-182957.log`, lokal):**
 
 - **DMC an 8,5 V:** etwa 70 mA, also rund 0,6 W. Die Ampere-Anzeige erscheint und folgt dem Drehknopf, die LEDs bleiben aus. In der Schalterstellung Aus bleibt das DMC trotz anliegender Spannung ganz aus, bis der Schalter betätigt wird (Angaben Rudi).
 - **Empfang:** kein gültiger Rahmen vom DMC. Es kommen nur Nullbytes, jedes mit UART-Fehler, das heißt die Leitung liegt am Empfänger immer wieder lange auf Low. Das begann erst mit dem Einschalten des DMC. Vorher waren es 0 Bytes.
 
-**Zweiter Lauf 05.11.2026, ohne R14 (`logs/vebus-20261105-184523.log`, lokal):**
+**Zweiter Lauf 05.11.2026, ohne R14, TXD falsch an P14 (`logs/vebus-20261105-184523.log`, lokal):**
 
-- Gleiches Bild: keine LEDs, kein gültiger Rahmen, dasselbe Muster aus Nullbytes mit UART-Fehlern, etwa 48 pro Sekunde und alle 0,5 s wiederkehrend. **R14 war also nicht die alleinige Ursache,** die Vermutung aus dem ersten Lauf ist widerlegt.
-- Das Muster beginnt mit dem Einschalten des DMC, stammt also vermutlich von ihm. Nullbytes mit Fehler bedeuten Low-Phasen von mindestens etwa 40 µs. Das DMC sendet also etwas, das bei 256.000 Baud nicht lesbar ist. Warum, ist offen.
-- **Noch nicht geprüft:** ob die Rahmen des ESP überhaupt sauber auf der Leitung ankommen. Hauptverdacht ist die automatische Richtungsumschaltung des Wandlers: Hält sie den Sender nach einem Null-Bit länger als ein Bit an, kann sie bei 256.000 Baud keine Einsen mehr erzeugen. Das ließe sich mit einem Oszilloskop oder einem zweiten Wandler als Empfänger prüfen. Ebenfalls ungeprüft: ob das DMC mehr braucht als die Rahmen des MultiPlus, etwa die Pins 6 und 7 oder die Rahmen des CCGX.
+- Gleiches Bild: keine LEDs, kein gültiger Rahmen, dasselbe Muster aus Nullbytes mit UART-Fehlern, etwa 48 pro Sekunde und alle 0,5 s wiederkehrend.
+- Da der ESP nichts sendete, zeigt das vermutlich, was das DMC macht, solange es keinen Bus hört. Nullbytes mit Fehler bedeuten Low-Phasen von mindestens etwa 40 µs. Die RXD-LED des Wandlers blinkte dazu.
 
 ## Unterschied zum Betrieb
 
