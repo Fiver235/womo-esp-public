@@ -141,7 +141,7 @@ Jede Aktion mit Uhrzeit notieren, mindestens 30 s Abstand. **„Aus" und „Lade
 1. 2 Minuten nichts tun (Grundzustand)
 2. Drehknopf langsam auf Minimum, dann Maximum, dann zurück
 3. Schalter: Ein → Ladegerät → Ein
-4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Der Bus sollte dabei weiterlaufen: Der GX meldete den MultiPlus vom 01.11. 17:42 bis 04.11. 15:17 durchgehend als „off" statt „nicht verfügbar", und das DMC zeigt im Aus-Zustand weiter Status an. Laut MK2-Dokument bleibt die interne Versorgung an, solange die Standby-Leitung auf GND liegt, und der GX kann sie laut Schaltplan ziehen. V+ selbst ist im Aus-Zustand noch nicht gemessen; einmal an Pin 2 nachmessen.
+4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Gemessen am 05.11.2026: Der Bus verstummt etwa 2 s nach „Aus" vollständig, siehe „Ergebnisse". V+ selbst ist im Aus-Zustand noch nicht gemessen; einmal an Pin 2 nachmessen.
 5. Mit Landstrom: dasselbe, und Landstrom einmal ab und wieder an. So sieht man die LED- und Stromrahmen in allen Zuständen.
 6. Einmal das RJ45-Kabel des DMC ziehen und wieder stecken: Das zeigt, was beim Start des DMC ausgetauscht wird. Vorsicht: Der MultiPlus kann dabei seinen Zustand ändern, deshalb nur, wenn eine kurze Unterbrechung der 230 V nicht stört.
 
@@ -153,14 +153,30 @@ Jede Aktion mit Uhrzeit notieren, mindestens 30 s Abstand. **„Aus" und „Lade
 
 Ergibt je Adresse und Befehl: Anzahl, Prüfsummenfehler, Varianten, mittleren Abstand und die Lage nach dem Sync in ms. Dazu kommt die Zeitachse der Änderungen an Panel-Rahmen 0x40 und LED-Rahmen 0x41, die sich mit den notierten Aktionen vergleichen lässt.
 
-Die Dekodierung von 0x40 und 0x41 stammt aus dem MK2-Dokument und der ve.bus-library. An echten DMC-Rahmen ist sie noch nicht bestätigt, insbesondere nicht die Bitlage der Schalterstellung.
+Die Dekodierung von 0x40 und 0x41 stammt aus dem MK2-Dokument und der ve.bus-library. Die Schalterstellungen und die Stromgrenze passen zu den Handgriffen im Mitschnitt vom 05.11.2026, die LED-Bits sind noch nicht einzeln geprüft.
+
+## Ergebnisse vom 05.11.2026
+
+Mitschnitt `logs/vebus-20261105-171337.log` (lokal, nicht im Repo), etwa 8 Minuten mit Drehknopf und Schalter, Landstrom vorhanden. **R14 (120 Ω) war dabei noch auf dem Modul.** MultiPlus und CCGX liefen danach normal weiter. Über die Wirkung von R14 auf die übrigen Geräte sagt das nur begrenzt etwas aus.
+
+- **Teilnehmer:** `8383` MultiPlus, `98F7` CCGX, **`F0F7` DMC**.
+- **DMC, Rahmen `40`, etwa alle 500 ms:** erstes Datenbyte `18` Ladegerät, `1A` Ein, `1B` Aus. Die beiden nächsten Bytes sind die Stromgrenze in 0,1 A, niedriges Byte zuerst (`A0 00` = 16,0 A).
+- **Drehknopf:** Am Anschlag unten sendet das DMC kurz `00 00` (0,0 A). Der MultiPlus begrenzt das auf 3,1 A. Der niedrigste am DMC abgelesene Wert war 3,5 A. Die Übersetzung nach Modbus muss also begrenzen und darf nicht blind 0 schreiben.
+- **MultiPlus, Rahmen `41`:** Schalterbyte `77` Ein, `74` und dann `44` Aus, `55` Ladegerät. Die Untergrenze ist bei Ein 3,1 A, bei Aus und Ladegerät 0,0 A.
+- **Aus:** Etwa 2 s nach dem Umschalten **verstummt der ganze Bus**, auch DMC und CCGX. In Home Assistant bleiben die letzten Werte stehen, die Anzeige hängt ohnehin etwa 30 s nach.
+- **Wieder Ein:** Der MultiPlus startet den Bus **zuerst**, etwa 0,6 s vor dem ersten Rahmen `40` des DMC. Das Einschalten läuft also vermutlich nicht über einen VE.Bus-Rahmen, sondern über eine Steuerleitung wie Pin 6 oder 7. Das ist nicht gemessen.
+- **Start des Busses:** Die Rahmennummern beginnen bei 0, das DMC meldet sich früh mit `F0F7 FC 0F 00 07`.
+- **Zähler:** 58.154 Rahmen, davon 21.226 Sync und 10 mit Prüfsummenfehler, keine Überläufe.
+- **Rahmen `00 FB xx`:** Genau diese 10 kurzen Rahmen werden als Fehler gezählt, sie kommen nur rund um Zustandswechsel vor. Die Summe aller Bytes vor `FF` ist immer `0x17A`, das spricht für ein festes Muster. In derselben Zeit stieg der UART-Fehlerzähler ebenfalls um 10. Ob es echte Rahmen oder Empfangsfehler sind, ist offen. Alle übrigen Rahmen hatten keine Prüfsummenfehler.
+
+**Noch offen:** R14 ausbauen und vergleichen, V+ und die Pins 6 und 7 in den Zuständen Ein und Aus messen, Start des DMC (Punkt 6 oben). Für Schritt 2 ist zu klären, wie der ESP gegenüber dem DMC „Aus" darstellen muss, denn der echte MultiPlus sendet dann gar nichts.
 
 ## Stand
 
 | Punkt | Stand 05.11.2026 |
 |---|---|
-| Firmware `esphome/vebus-sniffer.yaml`, `esphome/vebus_sniffer.h` | per USB geflasht (COM9), startet, TCP-Stream läuft; noch ohne Busdaten |
+| Firmware `esphome/vebus-sniffer.yaml`, `esphome/vebus_sniffer.h` | per USB geflasht (COM9), läuft und empfängt den VE.Bus |
 | `tools/vebus_capture.py` | Selbsttest OK: echte Beispielrahmen aus esp32ess, TCP-Strecke mit Testserver, Wiederverbinden |
 | Versorgung | Mitschnitt von der Powerbank. V+ gemessen 9,0 V ohne DMC, Probe unter Last offen |
 | WireGuard 192.168.100.210 | Peer in der Fritzbox angelegt, Handshake im Log erfolgreich (05.11.2026, WLAN WDS6G) |
-| Mitschnitt an der Anlage | offen, Hardware fehlt noch |
+| Mitschnitt an der Anlage | erster Lauf mit Drehknopf und Schalter erfolgreich, noch mit R14 auf dem Modul; siehe „Ergebnisse" |
