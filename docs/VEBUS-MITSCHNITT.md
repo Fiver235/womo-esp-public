@@ -34,17 +34,19 @@ Aus dem Victron-Schaltplan `VE_BBB_Cape_v0.80`, Seite 2, Stecker CN200/CN201. Da
 ```text
 Powerbank ─── USB-Buchse ESP32
 
-VE.Bus Pin 4 (A) ─── A+  RS485-Modul  Ausgang ── 1 kΩ ──┬── GPIO16 ESP32
-VE.Bus Pin 5 (B) ─── B−               Eingang ── VCC    2 kΩ
+VE.Bus Pin 4 (A) ─── A+  RS485-Modul  RXD ── 1 kΩ ──┬── GPIO16 ESP32
+VE.Bus Pin 5 (B) ─── B−               TXD ── VCC    2 kΩ
           3. Klemme (接大地) frei      VCC ─── 5V-Pin ESP32  └── GND
                                       GND ─── GND ESP32
 VE.Bus Pin 3 (GND) ─────────────────────────── GND ESP32
 ```
 
+- **RXD und TXD vorher prüfen:** Der Plan nimmt an, dass RXD der Ausgang und TXD der Eingang des Moduls ist. Die Beschriftung ist bei diesen Modulen uneinheitlich, deshalb gilt das Messergebnis aus „RS485-Modul vorbereiten“, Schritt 3. Zeigt die Messung das Gegenteil, RXD und TXD im Plan tauschen.
+
 - **5 V am Modul** (Entscheidung Rudi 05.11.2026): Das liegt im Datenblatt des MAX485 (4,75–5,25 V). Der 5V-Pin liefert bei USB-Versorgung je nach Board etwas weniger als 5 V, ob das reicht, zeigen die Zähler. Der 3V3-Pin des ESP bleibt frei.
 - **Spannungsteiler ist Pflicht:** Der Modulausgang liefert bis zu 5 V, die GPIOs vertragen nur 3,3 V. Vor dem Anschluss an GPIO16 messen: Modul versorgt, A+/B− offen, Mittelpunkt des Teilers noch nicht am GPIO. Etwa 3,3 V erwartet. Über ca. 3,4 V nicht an GPIO16 anschließen. Unter 2,5 V erkennt der ESP kein sicheres High, dann erst die Ursache klären.
 - **Masse:** Pin 3 muss angeschlossen sein, sonst fehlt dem Modul der Bezug zum Bus.
-- **Nicht senden können:** Der Dateneingang des Moduls liegt fest an VCC, dadurch bleibt der Sender aus. Die Firmware weist dem UART zusätzlich keinen TX-Pin zu.
+- **Nicht senden können:** Der Dateneingang des Moduls (TXD) liegt fest an VCC, dadurch bleibt der Sender aus. Die Firmware weist dem UART zusätzlich keinen TX-Pin zu.
 - Die dritte Klemme (接大地 = an Erde anschließen) bleibt frei. Sie führt nur zu den Schutzdioden.
 - **Keine zweite Verbindung:** Die Schaltung hängt nur an der Masse des VE.Bus. Pin 3 ist die Masse der VE.Bus-Schnittstelle, im GX ist sie galvanisch vom Rest getrennt (Si8641). Wie sie im MultiPlus zum Batterie-Minus liegt, ist nicht dokumentiert. Deshalb keine Verbindung zum Bordnetz, und **PC oder Netzteil nie gleichzeitig mit dem VE.Bus**. Das gilt auch für eine Powerbank, die gerade geladen wird. Nach dem ersten Flashen läuft alles per WLAN.
 - Vor dem Anschließen messen, gegen Pin 3: Pin 4 und 5 zwischen 0 und 5 V. Liegt etwas außerhalb, nicht anschließen.
