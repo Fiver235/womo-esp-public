@@ -100,7 +100,7 @@ Jede Aktion mit Uhrzeit notieren, mindestens 30 s Abstand. **„Aus" und „Lade
 1. 2 Minuten nichts tun (Grundzustand)
 2. Drehknopf langsam auf Minimum, dann Maximum, dann zurück
 3. Schalter: Ein → Ladegerät → Ein
-4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Wichtig: Läuft der Sync im Aus-Zustand weiter? Möglicherweise schaltet der MultiPlus dabei auch V+ ab. Dann fällt der ESP aus und startet nach dem Einschalten neu; das Werkzeug verbindet sich selbst wieder und vermerkt die Lücke. Das wäre selbst ein Ergebnis, aber der Aus-Zustand bliebe ungesehen.
+4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Der Bus sollte dabei weiterlaufen: Der GX meldete den MultiPlus vom 01.11. 17:42 bis 04.11. 15:17 durchgehend als „off" statt „nicht verfügbar", und das DMC zeigt im Aus-Zustand weiter Status an. Laut MK2-Dokument bleibt die interne Versorgung an, solange die Standby-Leitung auf GND liegt, und der GX kann sie laut Schaltplan ziehen. V+ selbst ist im Aus-Zustand noch nicht gemessen; einmal an Pin 2 nachmessen. Sollte der ESP doch ausfallen, verbindet sich das Werkzeug danach selbst wieder.
 5. Mit Landstrom: dasselbe, und Landstrom einmal ab und wieder an. So sieht man die LED- und Stromrahmen in allen Zuständen.
 6. Einmal das RJ45-Kabel des DMC ziehen und wieder stecken: Das zeigt, was beim Start des DMC ausgetauscht wird. Vorsicht: Der MultiPlus kann dabei seinen Zustand ändern, deshalb nur, wenn eine kurze Unterbrechung der 230 V nicht stört.
 
