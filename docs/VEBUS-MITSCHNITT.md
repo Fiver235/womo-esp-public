@@ -190,6 +190,12 @@ Firmware `esphome/vebus-dmc-bridge.yaml` mit `esphome/vebus_dmc_bridge.h`, gleic
 
 Jeder Schreibbefehl war nach etwa 50 ms bestätigt, ohne Fehlversuch. Home Assistant zeigt die Änderungen etwa 30 s später. „Letzter Befehl gewinnt“ funktioniert damit, wie in `docs/DMC-RECHERCHE.md` beschrieben, über einen Stellungswechsel am DMC.
 
+**Versuche gegen `FC 0F`, 05.11.2026, beide ohne Erfolg:**
+
+- **Neustart des ESP und automatischer Busstart:** Nach einer Pause von 2 s und einem Busstart ab Nummer 0 sendet das DMC kurz viele `40`, danach kommt die Flut wieder. Eine Lücke hängt jeweils fest, zum Beispiel `05 07` oder `2E 2F`.
+- **Busstart erst beim Einschalten des DMC:** Die Erkennung war fehlerhaft. Restliche Bytes nach dem Anhalten zählten als „DMC meldet sich“, sodass der Bus etwa alle 5 s neu startete und das DMC nicht mehr antwortete. Der Versuch ist zurückgenommen, die Firmware steht wieder auf dem Stand des Schalttests. Der Code liegt nur lokal in der Sicherung.
+- **Nebenbefund:** Um 21:12:04 meldete das DMC Schalter Aus, und der ESP schrieb Register 33 = 4. Der MultiPlus war damit aus. Steht der Schalter auf Aus und der Bus ist still, bleibt das DMC nach dem Einschalten dunkel und sendet nichts. Wird es danach auf Ein gestellt, gilt das als Ausgangswert und schreibt nichts. Das ist für den Betrieb zu bedenken.
+
 **Noch offen vor dem Einbau:** die häufigen `FC 0F` und die Kollisionen, die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
