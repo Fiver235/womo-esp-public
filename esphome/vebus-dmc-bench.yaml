@@ -1,0 +1,81 @@
+# ===========================================================================
+# Werkbanktest DMC: gleicher ESP32 wie vebus-sniffer.yaml, gleicher Name und gleiche WireGuard-Adresse.
+#
+# DIESE FIRMWARE SENDET. Nur auf einer eigenen Leitung zum DMC verwenden, nie am VE.Bus.
+# Hoert sie vor dem ersten Senden MultiPlus-Rahmen, sperrt sie das Senden bis zum Neustart.
+# Zurueck zum reinen Mitschnitt: vebus-sniffer.yaml flashen.
+# Verdrahtung und Ablauf: docs/VEBUS-MITSCHNITT.md, Abschnitt "Werkbanktest".
+#
+#   .\.venv\Scripts\esphome.exe run esphome\vebus-dmc-bench.yaml --device 192.168.100.210
+# ===========================================================================
+
+substitutions:
+  name: vebus-sniffer
+  friendly_name: "VE.Bus Sniffer"
+  rx_pin: "16"              # GPIO16 <- RXD ueber Teiler 1k/2k
+  tx_pin: "17"              # GPIO17 -> TXD ueber 1N4148, GPIO17 mit 10k an GND
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - vebus_sniffer.h
+    - vebus_dmc_replay.h
+    - vebus_dmc_bench.h
+  on_boot:
+    priority: -100
+    then:
+      - lambda: vebus_dmc_bench::start(${rx_pin}, ${tx_pin});
+
+esp32:
+  board: esp32dev
+  cpu_frequency: 160MHz     # Sendezeitpunkte brauchen mehr Reserve als der reine Empfang
+  framework:
+    type: esp-idf
+
+logger:
+  level: INFO
+  baud_rate: 115200
+
+api:
+  encryption:
+    key: !secret sniffer_api_encryption_key
+  reboot_timeout: 0s
+
+ota:
+  - platform: esphome
+    encryption:
+      key: !secret sniffer_api_encryption_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 0s
+  power_save_mode: none     # kein Modem-Sleep im Test, damit das WLAN die Sendezeiten nicht stoert
+  ap:
+    ssid: "VEBus-Sniffer Fallback"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+time:
+  - platform: sntp          # Pflicht fuer WireGuard
+    id: sntp_time
+
+wireguard:
+  address: 192.168.100.210
+  netmask: 255.255.255.0
+  private_key: !secret sniffer_wg_private_key
+  peer_endpoint: example.dyndns.org
+  peer_port: 59004
+  peer_public_key: !secret sniffer_wg_peer_public_key
+  peer_preshared_key: !secret sniffer_wg_preshared_key
+  peer_allowed_ips:
+    - 192.168.100.0/24
+  peer_persistent_keepalive: 25s
+  reboot_timeout: 0s
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: vebus_dmc_bench::log_stats();

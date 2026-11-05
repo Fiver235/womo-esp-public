@@ -87,6 +87,40 @@ Ausgang des Moduls      ── GPIO16 ESP32 wie beim Mitschnitt
 - **Dauersenden verhindern:** Bleibt der Treiber dauerhaft an, blockiert er die Leitung. Deshalb der Pull-down, dazu in der Firmware eine hardwaregesteuerte Umschaltung (RS485-Modus des UART) und eine Sperre gegen Dauersenden.
 - **Mitschnitt mit umgebautem Modul:** Die jetzige Firmware steuert GPIO4 und GPIO17 nicht an, der Pull-down hält den Treiber aus. Das umgebaute Modul hört also ebenfalls nur zu.
 
+## Werkbanktest (Schritt 2)
+
+Das DMC hängt nur am ESP. Die Firmware `esphome/vebus-dmc-bench.yaml` spielt aufgezeichnete MultiPlus-Rahmen aus dem Mitschnitt vom 05.11.2026 ab (`tools/vebus_make_replay.py`): einmal den Hochlauf nach „Aus“, danach endlos 30 s im Zustand Ein. Rahmennummer und Prüfsumme setzt sie neu, die Berechnung stimmte an allen 50.566 MultiPlus-Rahmen des Mitschnitts. Die LEDs folgen der Aufzeichnung, nicht dem Schalter. Ungetestet.
+
+Geprüft wird nur: Läuft das DMC ohne Fehleranzeige, reagieren die LEDs, und kommen seine Rahmen `40` fehlerfrei an?
+
+```text
+RS485-Wandler
+VCC ── 5V ESP        GND ── GND ESP
+RXD ── 1 kΩ ──┬── GPIO16 ESP
+             2 kΩ
+              └── GND
+TXD ──►|── 1N4148 ──┬── GPIO17 ESP    (Strich der Diode zum ESP)
+                  10 kΩ
+                    └── GND
+
+Adapterplatine mit dem Kabel des DMC, ohne Verbindung zum VE.Bus
+Pin 4 (A) ── A+ Wandler
+Pin 5 (B) ── B− Wandler
+Pin 3 (GND) ── GND ESP ── Minus Labornetzteil
+Pin 2 (V+) ── Plus Labornetzteil
+Pin 6, Pin 7 frei
+```
+
+- **Labornetzteil:** Vor dem Anschluss auf 8,5 V und eine Strombegrenzung von 150 mA einstellen. Der Strom ist ungemessen, die Grenze ist eine Annahme aus den rund 700 mW laut esp32ess. Nie die 5V-Klemme des ESP an Pin 2 und das DMC nicht ohne Klärung an das Bordnetz.
+- **R14:** Entscheidung Rudi: erster Test mit R14 auf dem Wandler. Erwartung: Die Einsen kommen beim DMC vermutlich nicht sauber an, weil R11/R12 gegen 120 Ω zu wenig Spannung erzeugen. Fehlen dem DMC die Rahmen, zuerst R14 ausbauen.
+- **Sperre:** Die Firmware hört vor dem Senden 5 s zu. Empfängt sie dabei MultiPlus-Rahmen, sendet sie bis zum Neustart nicht. Das ist eine Absicherung und ersetzt nicht die Trennung vom VE.Bus.
+- **Ablauf:**
+  1. Das DMC vom VE.Bus abziehen. Die 230 V über den Wechselrichter können dabei kurz ausfallen.
+  2. Am CCGX prüfen, ob der MultiPlus weiter läuft. Der CCGX merkt sich das DMC vermutlich bis „System neu erkennen“.
+  3. Aufbau verdrahten, Firmware flashen.
+  4. Mitschnitt mit `tools/vebus_capture.py` starten, dann das Labornetzteil einschalten.
+- **Zurück:** `vebus-sniffer.yaml` flashen, TXD wieder an VCC und das DMC wieder an den VE.Bus.
+
 ## Unterschied zum Betrieb
 
 Der Mitschnitt hängt am echten VE.Bus. Im geplanten Betrieb (`docs/DMC-RECHERCHE.md`, Abschnitt Vorgehen) kommt das DMC vom VE.Bus ab und bekommt ein **eigenes Kabel zum ESP**. Der ESP spielt dem DMC gegenüber den MultiPlus und schaltet den echten MultiPlus per WLAN über den GX. **Gesendet wird also nur zum DMC, nicht auf den VE.Bus.** Das alles ist noch ein Plan, ob das DMC damit läuft, klärt erst der Werkbanktest.

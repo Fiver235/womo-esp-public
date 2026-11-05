@@ -42,6 +42,7 @@ inline std::atomic<bool> g_client{false};
 inline RingbufHandle_t g_ring = nullptr;
 inline QueueHandle_t g_events = nullptr;
 inline int g_rx_pin = 16;
+inline void (*g_on_frame)(const uint8_t *frame, size_t len) = nullptr;  // nur fuer den Werkbanktest, sonst leer
 
 inline void push_record(uint32_t ts, uint8_t flags, const uint8_t *data, size_t len) {
   uint8_t rec[HEADER_LEN + MAX_FRAME];
@@ -106,6 +107,7 @@ inline void rx_task(void *) {
             if (chunk[i] == 0xFF) {
               g_frames++;
               if (len >= 5 && frame[2] == 0xFD && frame[4] == 0x55) g_syncs++;
+              if (g_on_frame != nullptr) g_on_frame(frame, len);
               push_record((uint32_t) now, 0, frame, len);
               len = 0;
             } else if (len >= MAX_FRAME) {
