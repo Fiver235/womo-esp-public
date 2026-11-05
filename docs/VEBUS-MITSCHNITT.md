@@ -12,11 +12,7 @@ Ziel: Welche Rahmen sendet das DMC, welche des MultiPlus wertet es aus, und in w
 - Anschluss an den Bus, eines von beiden:
   - eine **freie VE.Bus-Buchse** an MultiPlus oder CCGX mit einem aufgeschnittenen Netzwerkkabel. Die zwei Buchsen sind jeweils parallel.
   - ein T-Adapter mit **allen 8 Adern parallel**. Kein „Splitter", der Adernpaare auf zwei Buchsen aufteilt.
-- Für die Versorgung aus dem VE.Bus (Entscheidung Rudi 05.11.2026):
-  - Abwärtswandler, einstellbar, Eingang ab 4,5 V, z. B. MP1584, **vor dem Anschluss ohne Last auf 5,0 V eingestellt**
-  - Schottky-Diode, z. B. 1N5819, in Reihe in der V+-Leitung
-  - Elko 220 µF, mindestens 25 V, hinter der Diode. Elko 470–1000 µF, mindestens 6,3 V, besser 10 V, am 5V-Pin des ESP. Die WLAN-Spitzen kann V+ nicht liefern.
-  - Widerstand 270 Ω, mindestens 1 W, für die Belastungsprobe
+- Powerbank mit USB-Kabel zum ESP (Entscheidung Rudi 05.11.2026, siehe „Versorgung über V+“)
 
 ## RJ45-Belegung des VE.Bus
 
@@ -25,8 +21,8 @@ Aus dem Victron-Schaltplan `VE_BBB_Cape_v0.80`, Seite 2, Stecker CN200/CN201. Da
 | Pin | Signal | Für den Mitschnitt | Ader T568B (mit Durchgangsprüfer bestätigen) |
 |---|---|---|---|
 | 1 | frei | – | |
-| 2 | V+ (ca. 12 V, max. ca. 700 mW) | über Diode an den Abwärtswandler | orange |
-| 3 | GND | an GND von Modul, ESP und Abwärtswandler | weiß/grün |
+| 2 | V+ (gemessen 9,0 V, siehe „Versorgung über V+“) | **nicht anschließen** | orange |
+| 3 | GND | an GND von Modul und ESP | weiß/grün |
 | 4 | A | an A+ des Moduls | blau |
 | 5 | B | an B− des Moduls | weiß/blau |
 | 6 | Standby | **nicht anschließen** | |
@@ -36,22 +32,22 @@ Aus dem Victron-Schaltplan `VE_BBB_Cape_v0.80`, Seite 2, Stecker CN200/CN201. Da
 ## Verdrahtung
 
 ```text
+Powerbank ─── USB-Buchse ESP32
+
 VE.Bus Pin 4 (A) ─── A+  RS485-Modul  Ausgang ── 1 kΩ ──┬── GPIO16 ESP32
 VE.Bus Pin 5 (B) ─── B−               Eingang ── VCC    2 kΩ
-          3. Klemme (接大地) frei      VCC ─── 5 V       └── GND
-                                      GND ─── GND
-
-VE.Bus Pin 2 (V+) ──►|── 1N5819 ──┬── IN+  Abwärtswandler  OUT+ ──┬── 5V-Pin ESP32, VCC Modul
-                               220 µF      auf 5,0 V eingestellt  1000 µF
-VE.Bus Pin 3 (GND) ───────────────┴── IN−                  OUT− ──┴── GND ESP32, GND Modul
+          3. Klemme (接大地) frei      VCC ─── 5V-Pin ESP32  └── GND
+                                      GND ─── GND ESP32
+VE.Bus Pin 3 (GND) ─────────────────────────── GND ESP32
 ```
 
-- **5 V für Test und Betrieb** (Entscheidung Rudi 05.11.2026): Das liegt im Datenblatt des MAX485 (4,75–5,25 V), und die Versorgung bleibt für das spätere Senden gleich. Der 3V3-Pin des ESP bleibt frei.
-- **Spannungsteiler ist Pflicht:** Der Modulausgang liefert bis zu 5 V, die GPIOs vertragen nur 3,3 V. Bei versorgtem Modul und offenem A+/B− an GPIO16 messen: etwa 3,3 V erwartet. Über ca. 3,4 V ESP nicht anschließen. Unter 2,5 V erkennt der ESP kein sicheres High, dann erst die Ursache klären.
+- **5 V am Modul** (Entscheidung Rudi 05.11.2026): Das liegt im Datenblatt des MAX485 (4,75–5,25 V). Der 5V-Pin liefert bei USB-Versorgung je nach Board etwas weniger als 5 V, ob das reicht, zeigen die Zähler. Der 3V3-Pin des ESP bleibt frei.
+- **Spannungsteiler ist Pflicht:** Der Modulausgang liefert bis zu 5 V, die GPIOs vertragen nur 3,3 V. Vor dem Anschluss an GPIO16 messen: Modul versorgt, A+/B− offen, Mittelpunkt des Teilers noch nicht am GPIO. Etwa 3,3 V erwartet. Über ca. 3,4 V nicht an GPIO16 anschließen. Unter 2,5 V erkennt der ESP kein sicheres High, dann erst die Ursache klären.
+- **Masse:** Pin 3 muss angeschlossen sein, sonst fehlt dem Modul der Bezug zum Bus.
 - **Nicht senden können:** Der Dateneingang des Moduls liegt fest an VCC, dadurch bleibt der Sender aus. Die Firmware weist dem UART zusätzlich keinen TX-Pin zu.
 - Die dritte Klemme (接大地 = an Erde anschließen) bleibt frei. Sie führt nur zu den Schutzdioden.
-- **Keine zweite Verbindung:** Die Schaltung hängt nur an der Masse des VE.Bus. Pin 3 ist die Masse der VE.Bus-Schnittstelle, im GX ist sie galvanisch vom Rest getrennt (Si8641). Wie sie im MultiPlus zum Batterie-Minus liegt, ist nicht dokumentiert. Deshalb keine Verbindung zum Bordnetz, und **USB nie gleichzeitig mit dem VE.Bus**. Nach dem ersten Flashen läuft alles per WLAN.
-- Vor dem Anschließen messen, gegen Pin 3: Pin 2 ca. 12 V, Pin 4 und 5 zwischen 0 und 5 V. Liegt etwas außerhalb, nicht anschließen.
+- **Keine zweite Verbindung:** Die Schaltung hängt nur an der Masse des VE.Bus. Pin 3 ist die Masse der VE.Bus-Schnittstelle, im GX ist sie galvanisch vom Rest getrennt (Si8641). Wie sie im MultiPlus zum Batterie-Minus liegt, ist nicht dokumentiert. Deshalb keine Verbindung zum Bordnetz, und **PC oder Netzteil nie gleichzeitig mit dem VE.Bus**. Das gilt auch für eine Powerbank, die gerade geladen wird. Nach dem ersten Flashen läuft alles per WLAN.
+- Vor dem Anschließen messen, gegen Pin 3: Pin 4 und 5 zwischen 0 und 5 V. Liegt etwas außerhalb, nicht anschließen.
 
 ## RS485-Modul vorbereiten
 
@@ -96,46 +92,38 @@ Der Mitschnitt hängt am echten VE.Bus. Im geplanten Betrieb (`docs/DMC-RECHERCH
 | | Mitschnitt | Betrieb |
 |---|---|---|
 | A+ und B− | VE.Bus Pin 4 und 5 | Pin 4 und 5 des DMC-Kabels |
-| 12 V für Abwärtswandler | VE.Bus Pin 2 und 3 | offen, siehe unten |
-| Versorgung des DMC | aus dem VE.Bus | muss der Aufbau liefern: 12 V an Pin 2 und 3 des DMC-Kabels |
-| Abwärtswandler, Diode, Elkos, 5 V, Teiler, GPIO16 | wie oben | unverändert |
+| Versorgung des ESP | Powerbank | offen, siehe unten |
+| Versorgung des DMC | aus dem VE.Bus | muss der Aufbau liefern, an Pin 2 und 3 des DMC-Kabels |
+| 5 V am Modul, Teiler, GPIO16 | wie oben | unverändert |
 | GPIO17, GPIO4, Pull-down | frei | laut „Umbau zum Senden“ |
 
-- **Quelle der 12 V offen:** Entweder nur Pin 2 und 3 einer VE.Bus-Buchse oder abgesichertes Bordnetz. Der ESP muss den MultiPlus auch einschalten können, also auch im Aus-Zustand laufen. Dafür zuerst V+ im Aus-Zustand messen (Aktion 4 unten). Bei Bordnetz keine Verbindung zu VE.Bus-Pin 3 herstellen, solange die Massen nicht geprüft sind.
+- **Quelle offen:** Vermutlich abgesichertes Bordnetz mit Abwärtswandler auf 5 V, Pin 2 und 3 einer VE.Bus-Buchse nur, wenn die Messung unter „Versorgung über V+“ das hergibt. Der ESP muss den MultiPlus auch einschalten können, also auch im Aus-Zustand laufen. Bei Bordnetz keine Verbindung zu VE.Bus-Pin 3 herstellen, solange die Massen nicht geprüft sind.
+- **Spannung für das DMC offen:** Falls es an V+ hängt, bekommt es heute höchstens die gemessenen 9 V. Ob es die Batteriespannung bis ca. 14 V verträgt, ist nicht bekannt. Vor dem Anschluss klären.
 - **R14 am Betriebsmodul:** entfernen. Die kurze Leitung zum DMC braucht vermutlich keinen Abschluss, und er würde den Sendestrom deutlich erhöhen.
 - **R11 und R12 am Betriebsmodul vorerst drauflassen:** Auf der eigenen Leitung hält sonst niemand den Ruhepegel, wenn weder ESP noch DMC senden. Ob die Pull-Widerstände nötig sind, zeigt der Werkbanktest.
 
-## Reicht die Leistung?
+## Versorgung über V+ (vorerst nicht verwendet)
 
-V+ ist keine feste Spannungsquelle. esp32ess hat an einem anderen MultiPlus gemessen: 11,65 V Leerlauf und ca. 39 Ω Innenwiderstand, ohne Digital Multi Control. Laut Victron-Schaltplan versorgt V+ auch die Schnittstelle im GX, vermutlich hängt auch das DMC daran. Alle teilen sich dasselbe Budget, und bei zu viel Last sackt die Spannung für alle ab.
+Ursprünglich sollte der ESP aus V+ laufen. Rudi hat am 05.11.2026 an der Buchse des DMC, bei abgezogenem DMC, nur **9,0 V ohne Last** gemessen; der MultiPlus lief laut Home Assistant im Ladebetrieb bei 13,6 V Batteriespannung. Die Ursache ist nicht geklärt. esp32ess hat an einem anderen MultiPlus 11,65 V Leerlauf und ca. 39 Ω Innenwiderstand gemessen. Der Innenwiderstand an dieser Anlage ist unbekannt, und mit angestecktem DMC ist noch nicht gemessen. Deshalb läuft der Mitschnitt von der Powerbank.
 
-| Grobe Abschätzung, nicht gemessen | Leistung aus V+ |
-|---|---|
-| ESP32 bei 80 MHz mit Modem-Sleep, im Mittel ca. 50–70 mA an 5 V über den Längsregler des Boards | ca. 0,25–0,35 W |
-| RS485-Modul | ca. 0,01–0,02 W |
-| Wandlerverluste, ca. 80 % Wirkungsgrad | ca. 0,1 W |
-| **Summe im Mittel** | **ca. 0,35–0,45 W**, Spitzen beim Senden puffern die Elkos |
-
-**Belastungsprobe vor dem Anschluss der Schaltung:** An der VE.Bus-Buchse, alles im Normalbetrieb, DMC und GX angeschlossen:
+Falls V+ später doch in Frage kommt, zuerst messen: DMC und GX angeschlossen, an einer freien Buchse.
 
 1. Spannung Pin 2 gegen Pin 3 ohne Last messen: V0.
-2. 270 Ω kurz zwischen Pin 2 und Pin 3, etwa 40 mA: V1 messen. Innenwiderstand R = (V0 − V1) / (V1 / 270).
-3. Während der Probe prüfen: DMC-Anzeige normal, GX zeigt den MultiPlus weiter an, kein Alarm.
+2. 270 Ω (mindestens 1 W) wenige Sekunden zwischen Pin 2 und Pin 3: V1 messen. Innenwiderstand R = (V0 − V1) / (V1 / 270).
+3. Während der Probe prüfen: DMC-Anzeige normal, GX zeigt den MultiPlus weiter an, kein Alarm. Sonst Widerstand sofort entfernen.
 
-Weiter nur, wenn V1 über 9 V bleibt und nichts auffällt. Im Betrieb an Pin 2 nachmessen: Fällt die Spannung unter 9 V oder zeigt der GX VE.Bus-Fehler, Schaltung sofort abziehen.
-
-Das Anstecken lädt den 220-µF-Elko und zieht V+ für einige Millisekunden herunter. Deshalb nur anstecken, wenn ein kurzer Aussetzer der 230 V nicht stören würde.
+Die Probe zieht V+ kurz herunter, deshalb nur, wenn ein kurzer Aussetzer der 230 V nicht stören würde. Der Aufbau bräuchte aus V+ grob geschätzt 0,35–0,45 W, mit Abwärtswandler auf 5 V, Schottky-Diode und Elkos für die WLAN-Spitzen. Ob das geht, ergibt sich aus V0 und R. Die frühere Grenze von 9 V unter Last ist mit 9,0 V Leerlauf nicht einzuhalten.
 
 ## Inbetriebnahme
 
-1. ESP per USB flashen, noch **ohne** Bus und ohne Abwärtswandler am 5V-Pin:
+1. ESP per USB am PC flashen, noch **ohne** Bus:
 
    ```bash
    .\.venv\Scripts\esphome.exe run esphome\vebus-sniffer.yaml --device COMx
    ```
 
    Im Log stehen die WLAN-Adresse, „TCP-Stream auf Port 8484" und der WireGuard-Handshake. Das WLAN nutzt dieselben Zugangsdaten wie die anderen ESPs, die Adresse kommt dort per DHCP. Über WireGuard (eigener Fritzbox-Peer) ist der ESP fest unter **192.168.100.210** erreichbar, wie Alde-ESP (.202) und Proxy (.208).
-2. USB abziehen, Belastungsprobe machen, dann die Schaltung anstecken. Das Log gibt es nun per WLAN (`esphome logs`). Alle 30 s meldet es die Zähler. Erwartet: **50 Sync pro Sekunde**, UART-Fehler und Überläufe bleiben bei 0. Viele UART-Fehler und kein Sync: A und B tauschen, das ist beim reinen Empfang unkritisch.
+2. Vom PC abziehen, Powerbank anstecken, Schaltung an den Bus anschließen. Manche Powerbanks schalten bei kleinem Strom ab, dann verschwindet der ESP aus dem WLAN. Das Log gibt es nun per WLAN (`esphome logs`). Alle 30 s meldet es die Zähler. Erwartet: **50 Sync pro Sekunde**, UART-Fehler und Überläufe bleiben bei 0. Viele UART-Fehler und kein Sync: A und B tauschen, das ist beim reinen Empfang unkritisch.
 3. Mitschnitt starten, von überall, wo das Heimnetz erreichbar ist:
 
    ```bash
@@ -151,7 +139,7 @@ Jede Aktion mit Uhrzeit notieren, mindestens 30 s Abstand. **„Aus" und „Lade
 1. 2 Minuten nichts tun (Grundzustand)
 2. Drehknopf langsam auf Minimum, dann Maximum, dann zurück
 3. Schalter: Ein → Ladegerät → Ein
-4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Der Bus sollte dabei weiterlaufen: Der GX meldete den MultiPlus vom 01.11. 17:42 bis 04.11. 15:17 durchgehend als „off" statt „nicht verfügbar", und das DMC zeigt im Aus-Zustand weiter Status an. Laut MK2-Dokument bleibt die interne Versorgung an, solange die Standby-Leitung auf GND liegt, und der GX kann sie laut Schaltplan ziehen. V+ selbst ist im Aus-Zustand noch nicht gemessen; einmal an Pin 2 nachmessen. Sollte der ESP doch ausfallen, verbindet sich das Werkzeug danach selbst wieder.
+4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Der Bus sollte dabei weiterlaufen: Der GX meldete den MultiPlus vom 01.11. 17:42 bis 04.11. 15:17 durchgehend als „off" statt „nicht verfügbar", und das DMC zeigt im Aus-Zustand weiter Status an. Laut MK2-Dokument bleibt die interne Versorgung an, solange die Standby-Leitung auf GND liegt, und der GX kann sie laut Schaltplan ziehen. V+ selbst ist im Aus-Zustand noch nicht gemessen; einmal an Pin 2 nachmessen.
 5. Mit Landstrom: dasselbe, und Landstrom einmal ab und wieder an. So sieht man die LED- und Stromrahmen in allen Zuständen.
 6. Einmal das RJ45-Kabel des DMC ziehen und wieder stecken: Das zeigt, was beim Start des DMC ausgetauscht wird. Vorsicht: Der MultiPlus kann dabei seinen Zustand ändern, deshalb nur, wenn eine kurze Unterbrechung der 230 V nicht stört.
 
@@ -171,6 +159,6 @@ Die Dekodierung von 0x40 und 0x41 stammt aus dem MK2-Dokument und der ve.bus-lib
 |---|---|
 | Firmware `esphome/vebus-sniffer.yaml`, `esphome/vebus_sniffer.h` | kompiliert mit WireGuard, noch auf keinem ESP |
 | `tools/vebus_capture.py` | Selbsttest OK: echte Beispielrahmen aus esp32ess, TCP-Strecke mit Testserver, Wiederverbinden |
-| Versorgung über VE.Bus | Stromaufnahme nur geschätzt, Belastungsprobe an der Anlage offen |
+| Versorgung | Mitschnitt von der Powerbank. V+ gemessen 9,0 V ohne DMC, Probe unter Last offen |
 | WireGuard 192.168.100.210 | Peer in der Fritzbox angelegt, Handshake noch ungetestet; der Tunnel kostet zusätzlich etwas Strom |
 | Mitschnitt an der Anlage | offen, Hardware fehlt noch |

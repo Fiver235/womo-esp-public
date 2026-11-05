@@ -4,8 +4,8 @@
 # Hoert am VE.Bus nur zu und streamt jeden Rahmen per TCP (Port 8484) an
 # tools/vebus_capture.py. Diese Firmware KANN nicht senden: Der UART hat keinen
 # TX-Pin, der Dateneingang des RS485-Moduls liegt fest an VCC.
-# Versorgung ueber den VE.Bus (Pin 2/3, nur ca. 700 mW), daher auf wenig Verbrauch
-# getrimmt: 80 MHz, WLAN-Modem-Sleep, reduzierte Sendeleistung.
+# Versorgung im Mitschnitt von einer Powerbank; V+ am VE.Bus reicht vermutlich nicht.
+# Auf wenig Verbrauch getrimmt: 80 MHz, WLAN-Modem-Sleep, reduzierte Sendeleistung.
 # WireGuard wie die anderen Womo-ESPs: eigener Peer in der Fritzbox, 192.168.100.210.
 # Verdrahtung und Ablauf: docs/VEBUS-MITSCHNITT.md
 #

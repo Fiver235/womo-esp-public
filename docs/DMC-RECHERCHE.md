@@ -35,7 +35,7 @@ Folge: Am echten VE.Bus kann das DMC nicht bleiben, wenn der GX schalten soll.
 - 256000 Baud, 8N1, RS485.
 - Der MultiPlus sendet **alle 20 ms einen Sync-Rahmen** (`83 83 FD <Nr> 55 … FF`); andere Teilnehmer senden in Zeitfenstern danach (ve.bus-library: 8,0–9,5 ms nach Sync).
 - Datenrahmen `<Adresse 2 Byte> FE <Nr> <Befehl> … <Prüfsumme> FF`, Byte-Stuffing für 0xFA–0xFF, 8-Bit-Prüfsumme. Adresse 0x8383 = MultiPlus, 0x98F7 = MK3.
-- Versorgung im RJ45: rund **12 V, max. ca. 700 mW** vom MultiPlus (gemessen 11,65 V, ca. 39 Ω Innenwiderstand) [5].
+- Versorgung im RJ45: rund **12 V, max. ca. 700 mW** vom MultiPlus (gemessen 11,65 V, ca. 39 Ω Innenwiderstand) [5]. An Rudis Anlage nur 9,0 V ohne Last und ohne DMC (Messung 05.11.2026).
 - **Pinbelegung laut Victron-Schaltplan [7], Seite 2:** 1 frei, 2 V+, 3 GND, 4 A, 5 B, 6 Standby, 7 Panel Detect, 8 frei. esp32ess stimmt damit überein, die Angabe A = 3, B = 4, GND = 5 in der ve.bus-library nicht.
 
 **Nicht gefunden:** Ein Projekt, das gegenüber einem DMC den MultiPlus nachbildet. Alle Projekte sprechen *mit* dem MultiPlus, nicht *als* MultiPlus.
@@ -56,7 +56,7 @@ DMC ──RJ45/RS485 (eigenes Kabel)── ESP32 ──WLAN/Modbus TCP── Col
 ### Vorgehen
 
 1. **Passiver Mitschnitt** am bestehenden VE.Bus (nur Empfänger, sendet nichts; DMC bleibt dran): alle Rahmen mit Zeitstempel, dabei Schalter und Knopf bedienen. Ziel: welche Rahmen das DMC sendet und welche des MultiPlus es auswertet (0x41, 0x80, E4, Adressierung).
-2. **Werkbank:** DMC an eigenem Kabel am ESP, 12 V über abgesicherte Leitung, ESP sendet Sync + mitgeschnittene MultiPlus-Rahmen. Prüfen, ob das DMC ohne Fehleranzeige läuft und LEDs/Display reagieren.
+2. **Werkbank:** DMC an eigenem Kabel am ESP, Versorgung über abgesicherte Leitung (zulässige Spannung des DMC vorher klären, an V+ liegen an Rudis Anlage höchstens 9 V), ESP sendet Sync + mitgeschnittene MultiPlus-Rahmen. Prüfen, ob das DMC ohne Fehleranzeige läuft und LEDs/Display reagieren.
 3. Übersetzung DMC ↔ Modbus, Einbau, Testplan aus `MULTIPLUS-SCHALTER.md`.
 
 **Hardware:** Entscheidung Rudi 05.11.2026: **eigener neuer ESP32** für alle Schritte, der Proxy bleibt unberührt. Für Schritt 1 nimmt Rudi ein vorhandenes MAX485-Modul mit automatischer Richtungsumschaltung (5 V, Teiler zum ESP, Eingang fest an VCC, Widerstände entfernen laut [5, 6]). Für Schritt 2/3 bleibt es beim selben Modultyp (Entscheidung Rudi 05.11.2026), aber umgebaut auf direkt gesteuertes DI und DE/RE und mit 5 V versorgt; siehe „Umbau zum Senden“ dort. Verdrahtung und Ablauf von Schritt 1: `docs/VEBUS-MITSCHNITT.md`.
