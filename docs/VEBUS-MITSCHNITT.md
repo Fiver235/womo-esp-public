@@ -177,6 +177,21 @@ Firmware `esphome/vebus-dmc-bridge.yaml` mit `esphome/vebus_dmc_bridge.h`, gleic
   Es wurde nichts geschrieben, und die Werte stimmen mit den Handgriffen überein.
 - **Störungen:** `FC 0F` kommt weiter etwa 90-mal pro Sekunde, die Antwort `38` ändert daran nichts. Zeitweise sendet das DMC abgebrochene Rahmen, die mitten im Rahmen neu beginnen. Das sieht nach Kollisionen mit den Rahmen des ESP aus. Gültige Rahmen `40` kommen trotzdem regelmäßig an. Beides ist für den Dauerbetrieb noch zu klären.
 
+**Schalttest 05.11.2026 mit `write_enable: "true"` (Freigabe Rudi), bestanden:**
+
+| Schritt | Log des ESP | GX laut Log |
+|---|---|---|
+| 1 Knopf 12 A | 20:54:05 Register 22 = 120 bestätigt | Grenze 120 |
+| 2 DMC Aus | 20:54:21 Register 33 = 4 bestätigt | Mode 4, State 0, LEDs aus |
+| 3 DMC Ein | 20:54:36 Register 33 = 3 bestätigt | Wechselrichter, Bulk, Absorption; LEDs folgen |
+| 4 Aus über CCGX/VRM | kein Schreiben | ab etwa 20:55:20 Mode 4, LEDs aus, DMC-Schalter steht auf Ein |
+| 5 DMC Aus, dann Ein | 20:55:37 Register 33 = 4, 20:56:11 Register 33 = 3 | MultiPlus läuft wieder |
+| 6 Knopf 10 A | 20:56:59 Register 22 = 100 bestätigt | Grenze 100 |
+
+Jeder Schreibbefehl war nach etwa 50 ms bestätigt, ohne Fehlversuch. Home Assistant zeigt die Änderungen etwa 30 s später. „Letzter Befehl gewinnt“ funktioniert damit, wie in `docs/DMC-RECHERCHE.md` beschrieben, über einen Stellungswechsel am DMC.
+
+**Noch offen vor dem Einbau:** die häufigen `FC 0F` und die Kollisionen, die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
+
 **Test:**
 1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.
 2. Die LEDs sollten zum MultiPlus passen. Schalter und Knopf erzeugen nur Log-Einträge.

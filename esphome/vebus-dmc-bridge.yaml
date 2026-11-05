@@ -17,7 +17,7 @@ substitutions:
   tx_pin: "17"              # GPIO17 -> TXD ueber 1N4148, GPIO17 mit 10k an GND
   gx_ip: "192.168.1.242"    # GX im Womo-WLAN, wie im BLE-Proxy
   vebus_unit_id: "246"
-  write_enable: "false"     # erst nach Freigabe auf "true"
+  write_enable: "true"      # freigegeben von Rudi am 05.11.2026 fuer den Schalttest
 
 esphome:
   name: ${name}
