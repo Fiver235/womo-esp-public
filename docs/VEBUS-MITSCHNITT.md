@@ -141,7 +141,7 @@ Jede Aktion mit Uhrzeit notieren, mindestens 30 s Abstand. **„Aus" und „Lade
 1. 2 Minuten nichts tun (Grundzustand)
 2. Drehknopf langsam auf Minimum, dann Maximum, dann zurück
 3. Schalter: Ein → Ladegerät → Ein
-4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Gemessen am 05.11.2026: Der Bus verstummt etwa 2 s nach „Aus" vollständig, siehe „Ergebnisse". V+ selbst ist im Aus-Zustand noch nicht gemessen; einmal an Pin 2 nachmessen.
+4. Schalter: Ein → Aus, 1 Minute warten, → Ein. Gemessen am 05.11.2026: Der Bus verstummt etwa 2 s nach „Aus" vollständig und V+ fällt auf 2,2 V, siehe „Ergebnisse".
 5. Mit Landstrom: dasselbe, und Landstrom einmal ab und wieder an. So sieht man die LED- und Stromrahmen in allen Zuständen.
 6. Einmal das RJ45-Kabel des DMC ziehen und wieder stecken: Das zeigt, was beim Start des DMC ausgetauscht wird. Vorsicht: Der MultiPlus kann dabei seinen Zustand ändern, deshalb nur, wenn eine kurze Unterbrechung der 230 V nicht stört.
 
@@ -164,12 +164,25 @@ Mitschnitt `logs/vebus-20261105-171337.log` (lokal, nicht im Repo), etwa 8 Minut
 - **Drehknopf:** Am Anschlag unten sendet das DMC kurz `00 00` (0,0 A). Der MultiPlus begrenzt das auf 3,1 A. Der niedrigste am DMC abgelesene Wert war 3,5 A. Die Übersetzung nach Modbus muss also begrenzen und darf nicht blind 0 schreiben.
 - **MultiPlus, Rahmen `41`:** Schalterbyte `77` Ein, `74` und dann `44` Aus, `55` Ladegerät. Die Untergrenze ist bei Ein 3,1 A, bei Aus und Ladegerät 0,0 A.
 - **Aus:** Etwa 2 s nach dem Umschalten **verstummt der ganze Bus**, auch DMC und CCGX. In Home Assistant bleiben die letzten Werte stehen, die Anzeige hängt ohnehin etwa 30 s nach.
-- **Wieder Ein:** Der MultiPlus startet den Bus **zuerst**, etwa 0,6 s vor dem ersten Rahmen `40` des DMC. Das Einschalten läuft also vermutlich nicht über einen VE.Bus-Rahmen, sondern über eine Steuerleitung wie Pin 6 oder 7. Das ist nicht gemessen.
+- **Wieder Ein:** Der MultiPlus startet den Bus **zuerst**, etwa 0,6 s vor dem ersten Rahmen `40` des DMC. Das passt zur Messung an Pin 6 unten: Das Einschalten läuft über die Standby-Leitung, nicht über einen VE.Bus-Rahmen.
+- **Spannungen gegen Pin 3, DMC angeschlossen, Multimeter im Bereich V DC:**
+
+  | Schalter | Pin 2 (V+) | Pin 6 (Standby) | Pin 7 (Panel Detect) |
+  |---|---|---|---|
+  | Ein | 8,35 V | 0 V | 0 V |
+  | Aus | 2,2 V | 12,5 V | 0 V |
+  | Ladegerät | 8,85 V | 0 V | 0 V |
+
+  Deutung: Pin 7 liegt fest auf GND und meldet das Bedienteil. Bei Ein und Ladegerät liegt Pin 6 auf GND, bei Aus nicht. Dann fällt V+ zusammen und das DMC verliert vermutlich seine Versorgung. Wer Pin 6 zieht, ist nicht gemessen, sehr wahrscheinlich das DMC. Die Spannungen gelten für die Messung am 05.11.2026 mit Landstrom. Beide Punkte zählen für den Betrieb: **Pin 6 führt bis 12,5 V und darf nie direkt an einen GPIO, und V+ kann einen ESP im Aus-Zustand nicht versorgen.**
 - **Start des Busses:** Die Rahmennummern beginnen bei 0, das DMC meldet sich früh mit `F0F7 FC 0F 00 07`.
 - **Zähler:** 58.154 Rahmen, davon 21.226 Sync und 10 mit Prüfsummenfehler, keine Überläufe.
 - **Rahmen `00 FB xx`:** Genau diese 10 kurzen Rahmen werden als Fehler gezählt, sie kommen nur rund um Zustandswechsel vor. Die Summe aller Bytes vor `FF` ist immer `0x17A`, das spricht für ein festes Muster. In derselben Zeit stieg der UART-Fehlerzähler ebenfalls um 10. Ob es echte Rahmen oder Empfangsfehler sind, ist offen. Alle übrigen Rahmen hatten keine Prüfsummenfehler.
 
-**Noch offen:** R14 ausbauen und vergleichen, V+ und die Pins 6 und 7 in den Zuständen Ein und Aus messen, Start des DMC (Punkt 6 oben). Für Schritt 2 ist zu klären, wie der ESP gegenüber dem DMC „Aus" darstellen muss, denn der echte MultiPlus sendet dann gar nichts.
+**Noch offen:**
+- R14 ausbauen und vergleichen.
+- Start des DMC mitschneiden (Punkt 6 oben).
+- Prüfen, ob der Bus ohne DMC weiterläuft, wenn der GX den MultiPlus ausschaltet.
+- Für Schritt 2: wie der ESP dem DMC „Aus" darstellt und ob das DMC dauerhafte Versorgung im Aus-Zustand verträgt, denn am echten MultiPlus verliert es sie.
 
 ## Stand
 
@@ -177,6 +190,6 @@ Mitschnitt `logs/vebus-20261105-171337.log` (lokal, nicht im Repo), etwa 8 Minut
 |---|---|
 | Firmware `esphome/vebus-sniffer.yaml`, `esphome/vebus_sniffer.h` | per USB geflasht (COM9), läuft und empfängt den VE.Bus |
 | `tools/vebus_capture.py` | Selbsttest OK: echte Beispielrahmen aus esp32ess, TCP-Strecke mit Testserver, Wiederverbinden |
-| Versorgung | Mitschnitt von der Powerbank. V+ gemessen 9,0 V ohne DMC, Probe unter Last offen |
+| Versorgung | Mitschnitt von der Powerbank. V+ gemessen 9,0 V ohne DMC, mit DMC 8,35–8,85 V, bei Aus 2,2 V. V+ scheidet als Versorgung des ESP aus |
 | WireGuard 192.168.100.210 | Peer in der Fritzbox angelegt, Handshake im Log erfolgreich (05.11.2026, WLAN WDS6G) |
 | Mitschnitt an der Anlage | erster Lauf mit Drehknopf und Schalter erfolgreich, noch mit R14 auf dem Modul; siehe „Ergebnisse" |

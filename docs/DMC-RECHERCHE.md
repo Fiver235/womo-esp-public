@@ -35,7 +35,7 @@ Folge: Am echten VE.Bus kann das DMC nicht bleiben, wenn der GX schalten soll.
 - 256000 Baud, 8N1, RS485.
 - Der MultiPlus sendet **alle 20 ms einen Sync-Rahmen** (`83 83 FD <Nr> 55 … FF`); andere Teilnehmer senden in Zeitfenstern danach (ve.bus-library: 8,0–9,5 ms nach Sync).
 - Datenrahmen `<Adresse 2 Byte> FE <Nr> <Befehl> … <Prüfsumme> FF`, Byte-Stuffing für 0xFA–0xFF, 8-Bit-Prüfsumme. Adresse 0x8383 = MultiPlus, 0x98F7 = MK3.
-- Versorgung im RJ45: rund **12 V, max. ca. 700 mW** vom MultiPlus (gemessen 11,65 V, ca. 39 Ω Innenwiderstand) [5]. An Rudis Anlage nur 9,0 V ohne Last und ohne DMC (Messung 05.11.2026).
+- Versorgung im RJ45: rund **12 V, max. ca. 700 mW** vom MultiPlus (gemessen 11,65 V, ca. 39 Ω Innenwiderstand) [5]. An Rudis Anlage 9,0 V ohne DMC, mit DMC 8,35–8,85 V, bei Schalter Aus nur 2,2 V (Messungen 05.11.2026, Details in `docs/VEBUS-MITSCHNITT.md`).
 - **Pinbelegung laut Victron-Schaltplan [7], Seite 2:** 1 frei, 2 V+, 3 GND, 4 A, 5 B, 6 Standby, 7 Panel Detect, 8 frei. esp32ess stimmt damit überein, die Angabe A = 3, B = 4, GND = 5 in der ve.bus-library nicht.
 
 **Nicht gefunden:** Ein Projekt, das gegenüber einem DMC den MultiPlus nachbildet. Alle Projekte sprechen *mit* dem MultiPlus, nicht *als* MultiPlus.
