@@ -59,7 +59,7 @@ DMC ──RJ45/RS485 (eigenes Kabel)── ESP32 ──WLAN/Modbus TCP── Col
 2. **Werkbank:** DMC an eigenem Kabel am ESP, 12 V über abgesicherte Leitung, ESP sendet Sync + mitgeschnittene MultiPlus-Rahmen. Prüfen, ob das DMC ohne Fehleranzeige läuft und LEDs/Display reagieren.
 3. Übersetzung DMC ↔ Modbus, Einbau, Testplan aus `MULTIPLUS-SCHALTER.md`.
 
-**Hardware:** Entscheidung Rudi 05.11.2026: **eigener neuer ESP32** für alle Schritte, der Proxy bleibt unberührt. Dazu RS485-Transceiver für 3,3 V und 256 kBaud (z. B. MAX3485/SP3485; Abschluss- und Bias-Widerstände auf dem Modul entfernen, laut [5, 6]) und ein RJ45-Anschluss. Verdrahtung und Ablauf von Schritt 1: `docs/VEBUS-MITSCHNITT.md`.
+**Hardware:** Entscheidung Rudi 05.11.2026: **eigener neuer ESP32** für alle Schritte, der Proxy bleibt unberührt. Für Schritt 1 nimmt Rudi ein vorhandenes MAX485-Modul mit automatischer Richtungsumschaltung (5 V, Teiler zum ESP, Eingang fest an VCC, Widerstände entfernen laut [5, 6]). Für Schritt 2/3 braucht es einen Transceiver mit direkt steuerbarem DE/RE für 256 kBaud. Verdrahtung und Ablauf von Schritt 1: `docs/VEBUS-MITSCHNITT.md`.
 
 ### Risiken
 

@@ -1,7 +1,7 @@
 // Passiver VE.Bus-Mitschnitt: liest den RS485-Bus (256000 8N1) nur mit und streamt jeden Rahmen per TCP.
 //
 // Passiv by design: Der UART bekommt nur einen RX-Pin, es gibt in dieser Firmware keinen TX-Pin und
-// keinen Sendepfad. Am RS485-Modul sind DE und RE fest auf GND (siehe docs/VEBUS-MITSCHNITT.md).
+// keinen Sendepfad. Der Dateneingang des RS485-Moduls liegt fest an VCC (siehe docs/VEBUS-MITSCHNITT.md).
 //
 // Stream (TCP-Port 8484, ein Client), little endian, je Datensatz:
 //   u16 Kennung 0x5AA5 | u32 Zeit in us seit Start (Rahmenende, Genauigkeit ca. 0,2 ms) | u16 Laenge

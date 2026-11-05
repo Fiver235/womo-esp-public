@@ -3,7 +3,7 @@
 #
 # Hoert am VE.Bus nur zu und streamt jeden Rahmen per TCP (Port 8484) an
 # tools/vebus_capture.py. Diese Firmware KANN nicht senden: Der UART hat keinen
-# TX-Pin, am RS485-Modul liegen DE und RE fest auf GND.
+# TX-Pin, der Dateneingang des RS485-Moduls liegt fest an VCC.
 # Versorgung ueber den VE.Bus (Pin 2/3, nur ca. 700 mW), daher auf wenig Verbrauch
 # getrimmt: 80 MHz, WLAN-Modem-Sleep, reduzierte Sendeleistung.
 # WireGuard wie die anderen Womo-ESPs: eigener Peer in der Fritzbox, 192.168.100.210.
@@ -16,7 +16,7 @@
 substitutions:
   name: vebus-sniffer
   friendly_name: "VE.Bus Sniffer"
-  rx_pin: "16"              # GPIO16 <- RO des RS485-Moduls
+  rx_pin: "16"              # GPIO16 <- Modulausgang ueber Teiler 1k/2k (5 V -> 3,3 V)
 
 esphome:
   name: ${name}
