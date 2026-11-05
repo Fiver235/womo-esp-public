@@ -230,7 +230,7 @@ Mitschnitt `logs/vebus-20261105-171337.log` (lokal, nicht im Repo), etwa 8 Minut
 - **Zähler:** 58.154 Rahmen, davon 21.226 Sync und 10 mit Prüfsummenfehler, keine Überläufe.
 - **Rahmen `00 FB xx`:** Genau diese 10 kurzen Rahmen werden als Fehler gezählt, sie kommen nur rund um Zustandswechsel vor. Die Summe aller Bytes vor `FF` ist immer `0x17A`, das spricht für ein festes Muster. In derselben Zeit stieg der UART-Fehlerzähler ebenfalls um 10. Ob es echte Rahmen oder Empfangsfehler sind, ist offen. Alle übrigen Rahmen hatten keine Prüfsummenfehler.
 
-**Ohne DMC:** Der CCGX kann den MultiPlus ohne DMC am VE.Bus beliebig schalten (von Rudi geprüft, Angabe vom 05.11.2026). Damit ist die Grundlage des Umbaus bestätigt. Ein Mitschnitt dieses Zustands liegt nicht vor.
+**Ohne DMC:** Nach dem Abziehen des DMC meldete Home Assistant den MultiPlus ab 17:34 als aus und seine Werte ab 17:41 als nicht verfügbar. Nach „System neu erkennen“ am CCGX lässt er sich laut Rudi (05.11.2026) wieder über CCGX und VRM schalten, auch von Aus zurück auf Ein. Damit ist die Grundlage des Umbaus bestätigt. Die Ursache des Ausfalls ist nicht geklärt, und ein Mitschnitt dieses Zustands liegt nicht vor. Beim Umbau also einplanen: DMC abziehen, danach sofort neu erkennen und prüfen.
 
 **Noch offen:**
 - R14 ausbauen und vergleichen.
