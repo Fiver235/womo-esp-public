@@ -196,7 +196,19 @@ Jeder Schreibbefehl war nach etwa 50 ms bestätigt, ohne Fehlversuch. Home Assis
 - **Busstart erst beim Einschalten des DMC:** Die Erkennung war fehlerhaft. Restliche Bytes nach dem Anhalten zählten als „DMC meldet sich“, sodass der Bus etwa alle 5 s neu startete und das DMC nicht mehr antwortete. Der Versuch ist zurückgenommen, die Firmware steht wieder auf dem Stand des Schalttests. Der Code liegt nur lokal in der Sicherung.
 - **Nebenbefund:** Um 21:12:04 meldete das DMC Schalter Aus, und der ESP schrieb Register 33 = 4. Der MultiPlus war damit aus. Steht der Schalter auf Aus und der Bus ist still, bleibt das DMC nach dem Einschalten dunkel und sendet nichts. Wird es danach auf Ein gestellt, gilt das als Ausgangswert und schreibt nichts. Das ist für den Betrieb zu bedenken.
 
-**Noch offen vor dem Einbau:** die häufigen `FC 0F` und die Kollisionen, die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
+**Erst hören, dann senden, 06.11.2026:** Bei Schalter Ladegerät blinkten unregelmäßig zusätzlich die LEDs Inverter On, Float und Bulk auf. Mains On und Absorption blieben dabei an. Der Mitschnitt zeigte, dass der ESP nach dem Zeitplan der Aufzeichnung sendet, auch wenn das DMC gerade selbst sendet. Das DMC bricht dann ab und sendet neu. Die Firmware sendet jetzt erst, wenn RX eine Zeit lang am Stück auf Ruhepegel war, und wartet dafür höchstens 5 ms. Der eigene Rahmen kommt nicht auf RX zurück. Low auf RX bedeutet also, dass das DMC sendet.
+
+| je 3 min                     | vorher | Ruhe 80 µs | Ruhe 300 µs |
+|------------------------------|--------|------------|-------------|
+| gestörte Rahmen              | 320    | 999        | 204         |
+| `40` gestört                 | 29     | –          | –           |
+| `40` fehlt ~1 s              | 9      | 1          | 1           |
+| `FC 0F` pro Sekunde          | 86     | 95         | 71          |
+| Blinken (von Rudi gezählt)   | 9+     | 4+         | keins       |
+
+80 µs waren zu kurz. Das DMC sendet `FC 0F` in Paketen mit etwa 0,1 ms Pause, und der ESP drängte sich in diese Lücken. Mit 300 µs ist das Blinken weg. Die Flut `FC 0F` bleibt.
+
+**Noch offen vor dem Einbau:** die häufigen `FC 0F`, die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
 1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.

@@ -55,6 +55,7 @@ inline std::atomic<bool> g_want_38{false};
 // Sendeseite
 inline std::atomic<uint8_t> g_next_nr{0};
 inline std::atomic<bool> g_sending{false}, g_blocked{false};
+inline std::atomic<uint32_t> g_busy_waits{0}, g_busy_timeouts{0};
 inline std::atomic<uint32_t> g_multiplus_seen{0}, g_sent{0}, g_loops{0}, g_sent38{0};
 inline std::atomic<uint32_t> g_writes_ok{0}, g_writes_failed{0}, g_gx_errors{0};
 
@@ -155,8 +156,40 @@ inline size_t head_41(uint8_t *h) {
   return n;
 }
 
+// Erst hoeren, dann senden. Das DMC sendet in seinem eigenen Takt, der ESP spielt die Aufzeichnung ab. Ohne diese
+// Pruefung faellt der ESP dem DMC ins Wort (Mitschnitt 05.11.2026 23:59: 29 gestoerte 0x40 in 3 min, das DMC
+// blinkt dabei kurz mit Wechselrichter, Float und Bulk). Der eigene Rahmen kommt nicht zurueck auf RX (der Wandler
+// schaltet beim Senden den Empfaenger ab), Pegel Low auf RX heisst also: das DMC sendet.
+// Frei ist die Leitung nach IDLE_US am Stueck High. Innerhalb eines Rahmens sind es hoechstens 9 Bit (35 us). 80 us
+// reichten nicht: Der ESP draengte sich in die Luecken zwischen den FC-0F-Rahmen (999 gestoerte statt 320).
+static constexpr int64_t IDLE_US = 300;  // laenger als die Pause zwischen den FC-0F-Rahmen des DMC (~0,1 ms)
+static constexpr int64_t BUSY_MAX_US = 5000;
+
+inline void wait_bus_idle() {
+  uart_wait_tx_done(vebus_sniffer::PORT, pdMS_TO_TICKS(10));  // eigener Rahmen ganz draussen
+  const gpio_num_t rx = (gpio_num_t) vebus_sniffer::g_rx_pin;
+  const int64_t start = esp_timer_get_time();
+  int64_t high_since = start;
+  bool busy = false;
+  for (;;) {
+    const int64_t now = esp_timer_get_time();
+    if (gpio_get_level(rx) == 0) {
+      high_since = now;
+      busy = true;
+    } else if (now - high_since >= IDLE_US) {
+      break;
+    }
+    if (now - start > BUSY_MAX_US) {
+      g_busy_timeouts++;
+      break;
+    }
+  }
+  if (busy) g_busy_waits++;
+}
+
 inline void send_frame(const uint8_t *head, size_t len) {
   uint8_t out[64];
+  wait_bus_idle();
   const uint8_t nr = g_next_nr.load();
   const size_t n = build(head, len, nr, out);
   uart_write_bytes(vebus_sniffer::PORT, out, n);
@@ -430,9 +463,11 @@ inline void start(int rx_pin, int tx_pin, const char *gx_ip, uint8_t unit, bool 
 inline void log_stats() {
   vebus_sniffer::log_stats();
   const int64_t age = g_gx_ok_us.load() == 0 ? -1 : (esp_timer_get_time() - g_gx_ok_us.load()) / 1000000;
-  ESP_LOGI(TAG, "%s, gesendet %u, Schleifen %u, 0x38 %u | DMC 0x40 ok %u, schlecht %u, FC0F %u, Schalter %u, Grenze %u",
+  ESP_LOGI(TAG, "%s, gesendet %u, Schleifen %u, 0x38 %u, gewartet %u/%u | DMC 0x40 ok %u, schlecht %u, FC0F %u, "
+           "Schalter %u, Grenze %u",
            g_blocked.load() ? "GESPERRT" : (g_sending.load() ? "sendet" : "hoert zu"), (unsigned) g_sent.load(),
-           (unsigned) g_loops.load(), (unsigned) g_sent38.load(), (unsigned) g_panel_ok.load(),
+           (unsigned) g_loops.load(), (unsigned) g_sent38.load(), (unsigned) g_busy_waits.load(),
+           (unsigned) g_busy_timeouts.load(), (unsigned) g_panel_ok.load(),
            (unsigned) g_panel_bad.load(), (unsigned) g_fc0f.load(), (unsigned) g_dmc_pos.load(),
            (unsigned) g_dmc_limit.load());
   ESP_LOGI(TAG, "GX vor %d s: Mode %u, State %u, Grenze %u, LED %02X | geschrieben %u, fehlgeschlagen %u, GX-Fehler %u",
