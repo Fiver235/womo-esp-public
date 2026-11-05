@@ -64,7 +64,31 @@ Alles ohne Busanschluss und ohne ESP:
 2. **Pull-Widerstände suchen:** Stromlos messen von A+ nach VCC, von A+ nach GND, von B− nach VCC und von B− nach GND. Liegt ein Wert unter etwa 100 kΩ, führt er vermutlich über R11 oder R12. Den betreffenden Widerstand entfernen und erneut messen.
 3. **Eingang und Ausgang bestimmen:** Das Modul mit 3,3 V versorgen, A+ und B− offen. TXD und RXD nacheinander über 10 kΩ gegen GND legen und die Spannung am Pin messen. Bleibt sie bei etwa 3,3 V, ist der Pin der **Ausgang**, er kommt an GPIO16. Sinkt sie deutlich, ist er der **Eingang**, er kommt fest an VCC. Die Beschriftung TXD/RXD ist bei diesen Modulen uneinheitlich, deshalb messen.
 
-Das Modul eignet sich **nur für den Mitschnitt**. Für das spätere Senden mit genauem Timing ist die automatische Umschaltung nicht ausgelegt; dafür braucht es ein Modul mit direkt steuerbarem DE/RE.
+Für den Mitschnitt reicht das so. Zum Senden muss das Modul umgebaut werden, siehe nächster Abschnitt.
+
+## Umbau zum Senden (später)
+
+Entscheidung Rudi 05.11.2026: Dieses Modul bleibt auch für den Betrieb, es sind mehrere vorhanden. Der Umbau ist ein Plan und noch nicht erprobt. Er setzt die unten geprüfte Schaltung voraus.
+
+**Warum unverändert nicht:** Bei diesen Modulen liegt der Dateneingang DI üblicherweise fest auf GND, und der CD4069 steuert aus dem Datensignal nur die Richtung. Eine 0 wird aktiv getrieben, bei einer 1 schaltet der Treiber ab und nur Pull-Widerstände ziehen den Bus zurück. Bei 256 kBaud dauert ein Bit 3,9 µs. Mit 4,7 kΩ wäre das vermutlich zu langsam, und kleinere Pull-Widerstände würden den Bus dauerhaft belasten. Nach dem Umbau treibt der MAX485 beide Pegel selbst, die Pull-Widerstände und R14 bleiben entfernt.
+
+Den Umbau zuerst an einem zweiten Modul machen. Das unveränderte Modul bleibt für den Mitschnitt und als Reserve.
+
+1. **Schaltung prüfen,** stromlos mit dem Durchgangsprüfer. Pinbelegung des MAX485 laut Datenblatt: 1 RO, 2 /RE, 3 DE, 4 DI, 5 GND, 6 A, 7 B, 8 VCC. Erwartet: Pin 2 und 3 verbunden und am CD4069, Pin 4 auf GND, Pin 1 am Ausgang des Moduls. Weicht etwas ab, erst klären und nicht weiterbauen.
+2. **MAX485 Pin 2/3 und Pin 4 freilegen:** Pins anheben oder die Leiterbahnen durchtrennen. Pin 2 und 3 müssen untereinander verbunden bleiben. Danach darf Pin 2/3 keinen Durchgang mehr zum CD4069 haben und Pin 4 keinen mehr nach GND.
+3. **Eingang des Moduls weiter fest an VCC,** damit der CD4069 einen festen Pegel hat.
+4. **Neu verdrahten:**
+
+```text
+MAX485 Pin 4 (DI)       ── GPIO17 ESP32
+MAX485 Pin 2+3 (/RE+DE) ── GPIO4 ESP32
+MAX485 Pin 2+3          ── 10 kΩ ── GND   Pflicht: Treiber bleibt aus, solange der ESP nicht aktiv treibt
+Ausgang des Moduls      ── GPIO16 ESP32 wie beim Mitschnitt
+```
+
+- **Versorgung:** Der MAX485 ist nur für 4,75–5,25 V spezifiziert, und beim Senden hängt der Pegel auf dem Bus direkt von VCC ab. Zum Senden deshalb die 5-V-Variante: Wandler auf 5,0 V an den 5V-Pin des ESP und an VCC des Moduls, Ausgang über den Teiler 1 kΩ / 2 kΩ an GPIO16. GPIO17 und GPIO4 brauchen keinen Teiler, die Eingänge des MAX485 erkennen 3,3 V laut Datenblatt als High (ab 2,0 V).
+- **Gefahr:** Bleibt der Treiber dauerhaft an, blockiert er den ganzen VE.Bus. Deshalb der Pull-down, dazu in der Firmware eine hardwaregesteuerte Umschaltung (RS485-Modus des UART) und eine Sperre gegen Dauersenden.
+- **Mitschnitt mit umgebautem Modul:** Die jetzige Firmware steuert GPIO4 und GPIO17 nicht an, der Pull-down hält den Treiber aus. Das umgebaute Modul hört also ebenfalls nur zu.
 
 ## Reicht die Leistung?
 
