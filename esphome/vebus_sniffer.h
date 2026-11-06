@@ -33,6 +33,7 @@ static constexpr uart_port_t PORT = UART_NUM_2;
 static constexpr int BAUD = 256000;
 static constexpr uint16_t TCP_PORT = 8484;
 static constexpr size_t MAX_FRAME = 300;
+static constexpr size_t MAX_RECORD = 600;  // groesster Datensatz im Strom (Flanken aus vebus_edges.h)
 static constexpr int64_t GAP_US = 5000;  // Pause innerhalb eines Rahmens: Rest gilt als abgeschnitten
 static constexpr size_t HEADER_LEN = 9;
 static constexpr size_t RING_SIZE = 32 * 1024;
@@ -47,8 +48,8 @@ inline void (*g_on_frame)(const uint8_t *frame, size_t len) = nullptr;  // nur f
 inline void (*g_on_command)(const char *text) = nullptr;
 
 inline void push_record(uint32_t ts, uint8_t flags, const uint8_t *data, size_t len) {
-  uint8_t rec[HEADER_LEN + MAX_FRAME];
-  if (len > MAX_FRAME) len = MAX_FRAME;
+  uint8_t rec[HEADER_LEN + MAX_RECORD];
+  if (len > MAX_RECORD) len = MAX_RECORD;
   rec[0] = 0xA5;
   rec[1] = 0x5A;
   memcpy(rec + 2, &ts, 4);

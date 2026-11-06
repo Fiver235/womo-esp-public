@@ -232,6 +232,19 @@ Offen ist damit nur noch, **warum das DMC den Sync des ESP nicht annimmt**. Inha
 
 Für die Versuche lässt sich die Firmware über den Mitschnitt-Port umschalten, ohne neu zu flashen: `tools/vebus_capture.py capture --script "0=L1,30=De4,60=A L0"` (`L0/L1` eigene Zeitbasis, `R0/R1/R2` Antwort auf `FC 0F`, `Dxx/Uxx/A` Rahmentyp auslassen oder wieder senden, `O<n>` Abstand der Sync-Zeit). Die Antwort mit `38` ist jetzt abgeschaltet (`fc_reply: "0"`). **Nicht geklärt:** Beim Flashen im Betrieb mit eigener Zeitbasis ist die Verbindung zum ESP abgerissen, danach war er nicht mehr erreichbar. Der zeitgenaue Sync sperrt kurz die Interrupts, ein Zusammenhang ist möglich. Vor dem Flashen deshalb `L0` senden.
 
+**Flankenaufzeichnung, vorbereitet am 06.11.2026, am Gerät ungetestet.** Die Firmware `esphome/vebus-sniffer-edges.yaml` ist der passive Mitschnitt mit einem Zusatz (`esphome/vebus_edges.h`): Die RMT-Einheit des ESP32 misst am selben RX-Pin jede Flanke eines Rahmens auf 25 ns. Sie kann wie `vebus-sniffer.yaml` nicht senden. Aufgezeichnet wird zufällig jeder dritte Rahmen, als Zeile `E` im Log. Rahmen mit weniger als 0,3 ms Abstand landen in einem Datensatz.
+
+Ablauf:
+
+1. Powerbank vom ESP ab, Labornetzteil aus. Das DMC bleibt vom VE.Bus getrennt.
+2. Umverdrahten wie in „Verdrahtung“ oben: TXD des Wandlers von der Diode weg fest an VCC, A, B und GND an den VE.Bus. Das DMC hängt dabei nicht am Wandler.
+3. Powerbank an, flashen: `.\.venv\Scripts\esphome.exe run esphome\vebus-sniffer-edges.yaml --device 192.168.100.210`. Die Brücken-Firmware sperrt ihr Senden selbst, sobald sie MultiPlus-Rahmen hört. Sicherer ist trotzdem, vor dem Anschließen an den VE.Bus zu flashen.
+4. Aufzeichnen: `python tools\vebus_capture.py capture --seconds 120`.
+5. Auswerten: `python tools\vebus_capture.py edges logs\<datei>.log`. Die Tabelle zeigt je Rahmenart den Abstand der Bytes in Bit (8N1 ohne Pause = 10,00), die Bitdauer, die Lage der Flanken zum Bitraster und den kürzesten Puls. Darunter stehen Beispiele mit allen Pulsen.
+6. Zurück auf die Werkbank: Verdrahtung aus „Werkbanktest“, `vebus-dmc-bridge.yaml` flashen.
+
+Gesucht wird alles, worin sich der Sync von den Datenrahmen oder vom Signal des ESP unterscheidet: Pausen zwischen den Bytes, ein zweites Stoppbit, zusätzliche Pulse, eine andere Bitdauer. Der ESP sendet 8N1 ohne Pausen mit 3906 ns je Bit. Die Auswertung ist bisher nur mit künstlichen Daten geprüft (`selftest`).
+
 **Noch offen vor dem Einbau:** die häufigen `FC 0F` (Ursache eingegrenzt, siehe oben), die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**

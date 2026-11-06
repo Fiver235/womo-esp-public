@@ -5,7 +5,8 @@
     python tools/vebus_capture.py analyze logs/x.log
     python tools/vebus_capture.py selftest
 
-capture schreibt jede Zeile als  <Windows-Uhrzeit> <ESP-Zeit in us> <F|C> <Hex>  (F = Rahmen, C = abgeschnitten)
+capture schreibt jede Zeile als  <Windows-Uhrzeit> <ESP-Zeit in us> <F|C|T|E> <Hex>  (F = Rahmen, C = abgeschnitten, T = vom ESP gesendet,
+E = Flanken eines Rahmens aus vebus_edges.h, Auswertung mit "edges")
 und zeigt live alle Rahmen, deren Inhalt sich geaendert hat (Sync und Zaehler ausgeblendet). Aktionen am DMC
 mit der Uhrzeit notieren, dann lassen sie sich in der Auswertung zuordnen.
 
@@ -18,6 +19,7 @@ Ab Index 4 sind 0xFA..0xFF als FA, Wert-0x80 kodiert.
 from __future__ import annotations
 
 import argparse
+import bisect
 import datetime as dt
 import socket
 import struct
@@ -171,6 +173,9 @@ def capture(host: str, port: int, out: Path, seconds: float | None, script: list
                         if flags == 4:  # vom ESP selbst gesendet (Werkbank), nur ins Log
                             log.write(f"{now} {ts} T {data.hex()}\n")
                             continue
+                        if flags == 6:  # Flanken eines Rahmens (vebus_edges.h), nur ins Log
+                            log.write(f"{now} {ts} E {data.hex()}\n")
+                            continue
                         if flags == 5:  # Befehl, vom ESP bestaetigt
                             log.write(f"# cmd {now} {ts} {data.decode('ascii', 'replace')}\n")
                             continue
@@ -219,6 +224,8 @@ def analyze(path: Path) -> int:
         if len(parts) != 4:
             continue
         now, ts, typ, hexdata = parts[0], int(parts[1]), parts[2], parts[3]
+        if typ == "E":      # Flanken, eigene Auswertung mit "edges"
+            continue
         if prev_raw is not None and ts < prev_raw:
             base += 1 << 32
         prev_raw = ts
@@ -266,6 +273,141 @@ def analyze(path: Path) -> int:
     return 0
 
 
+# ---------------------------------------------------------------------- Flanken
+TICK_NS = 25.0              # Aufloesung in vebus_edges.h
+BIT_NS = 1e9 / 256000       # Soll-Bitdauer
+
+
+def edge_segments(data: bytes) -> list[tuple[int, float]]:
+    """RMT-Symbole -> Abschnitte (Pegel, Dauer in ns). Dauer 0 beendet den Rahmen."""
+    seg: list[tuple[int, float]] = []
+    for (word,) in struct.iter_unpack("<I", data[: len(data) // 4 * 4]):
+        for dur, lvl in ((word & 0x7FFF, (word >> 15) & 1), ((word >> 16) & 0x7FFF, word >> 31)):
+            if dur == 0:
+                return seg
+            seg.append((lvl, dur * TICK_NS))
+    return seg
+
+
+def edge_decode(seg: list[tuple[int, float]]) -> dict:
+    """Dekodiert die Abschnitte als 8N1 und misst die Flanken gegen das Bitraster jedes Bytes."""
+    starts, levels, t = [], [], 0.0
+    for lvl, dur in seg:
+        starts.append(t)
+        levels.append(lvl)
+        t += dur
+    end = t
+
+    def level(at: float) -> int:
+        if at >= end or not starts:
+            return 1        # nach dem Rahmen: Ruhepegel
+        return levels[max(0, bisect.bisect_right(starts, at) - 1)]
+
+    out = {"bytes": [], "starts": [], "stop_bad": 0, "rise": [], "fall": [], "fit": [0.0, 0.0],
+           "short": min((d for _, d in seg), default=0.0)}
+    pos, i = 0.0, 0
+    while True:
+        j = next((k for k in range(i, len(starts)) if levels[k] == 0 and starts[k] >= pos - 1), None)
+        if j is None:
+            break
+        t0 = starts[j]
+        value = 0
+        for b in range(8):
+            value |= level(t0 + (b + 1.5) * BIT_NS) << b
+        out["stop_bad"] += 0 if level(t0 + 9.5 * BIT_NS) else 1
+        out["bytes"].append(value)
+        out["starts"].append(t0)
+        pos = t0 + 9.5 * BIT_NS
+        for k in range(j + 1, len(starts)):   # Flanken innerhalb des Bytes
+            dt = starts[k] - t0
+            if dt >= pos - t0:
+                break
+            n = round(dt / BIT_NS)
+            out["rise" if levels[k] else "fall"].append(dt - n * BIT_NS)
+            out["fit"][0] += dt * n
+            out["fit"][1] += n * n
+        i = j + 1
+    return out
+
+
+def edge_wave(frame: bytes, stop_bits: int = 1, gap_after: dict | None = None) -> bytes:
+    """Nur fuer den Selbsttest: 8N1-Signal eines Rahmens als RMT-Symbole. gap_after: Byteindex -> Zusatzbits Pause."""
+    bits: list[int] = []
+    for idx, byte in enumerate(frame):
+        bits += [0] + [(byte >> b) & 1 for b in range(8)] + [1] * stop_bits
+        bits += [1] * (gap_after or {}).get(idx, 0)
+    runs: list[list[int]] = []
+    for bit in bits:
+        if runs and runs[-1][0] == bit:
+            runs[-1][1] += 1
+        else:
+            runs.append([bit, 1])
+    if runs[-1][0] == 1:
+        runs.pop()          # Ruhe am Ende: die Hardware meldet sie als Dauer 0
+    durs = [(lvl, round(n * BIT_NS / TICK_NS)) for lvl, n in runs] + [(1, 0)]
+    if len(durs) % 2:
+        durs.append((0, 0))
+    return b"".join(struct.pack("<I", d0 | l0 << 15 | d1 << 16 | l1 << 31)
+                    for (l0, d0), (l1, d1) in zip(durs[0::2], durs[1::2]))
+
+
+def edges(path: Path, examples: int) -> int:
+    groups: dict[str, dict] = defaultdict(lambda: {"n": 0, "ok": 0, "gaps": [], "bit": [], "rise": [], "fall": [],
+                                                   "short": [], "stop_bad": 0, "examples": []})
+    total = 0
+    for line in path.read_text(encoding="ascii", errors="replace").splitlines():
+        parts = line.split()
+        if len(parts) != 4 or parts[2] != "E":
+            continue
+        total += 1
+        seg = edge_segments(bytes.fromhex(parts[3]))
+        d = edge_decode(seg)
+        raw = bytes(d["bytes"])
+        first = raw[: raw.index(0xFF) + 1] if 0xFF in raw else raw    # ein Datensatz kann mehrere Rahmen enthalten
+        if len(first) >= 5 and first[2] in (0xFC, 0xFD, 0xFE):
+            name = f"{first[:2].hex()} " + ("Sync" if first[2] == 0xFD else f"{first[2]:02X} {first[4]:02X}")
+        else:
+            name = "unklar"   # Aufzeichnung begann mitten im Rahmen, oder Stoerung
+        g = groups[name]
+        g["n"] += 1
+        g["ok"] += 1 if checksum_ok(first) else 0
+        st = d["starts"][: len(first)]
+        g["gaps"] += [(b - a) / BIT_NS for a, b in zip(st, st[1:])]
+        if d["fit"][1]:
+            g["bit"].append(d["fit"][0] / d["fit"][1])
+        g["rise"] += d["rise"]
+        g["fall"] += d["fall"]
+        g["short"].append(d["short"])
+        g["stop_bad"] += d["stop_bad"]
+        if len(g["examples"]) < examples:
+            g["examples"].append((parts[0], first, st, seg))
+    if not total:
+        print("Keine Flanken-Zeilen (E) im Log. Firmware vebus-sniffer-edges.yaml und Befehl E<n> pruefen.")
+        return 1
+
+    def stat(v: list[float], f: str = "{:.2f}") -> str:
+        return "-" if not v else "/".join(f.format(x) for x in (min(v), sum(v) / len(v), max(v)))
+
+    print(f"{total} Datensaetze mit Flanken. Bitdauer Soll {BIT_NS:.1f} ns, Byteabstand Soll 10,00 Bit (8N1 ohne Pause).\n")
+    print("Rahmen          Anzahl   ok  Byteabstand Bit    Bitdauer ns           steigend  fallend  kuerzester  Stopp-")
+    print("                             min/mittel/max     min/mittel/max        ns        ns       Puls ns     fehler")
+    for name in sorted(groups, key=lambda k: -groups[k]["n"]):
+        g = groups[name]
+        rise = f"{sum(g['rise']) / len(g['rise']):+.0f}" if g["rise"] else "-"
+        fall = f"{sum(g['fall']) / len(g['fall']):+.0f}" if g["fall"] else "-"
+        print(f"{name:14s} {g['n']:7d} {g['ok']:4d}  {stat(g['gaps']):18s} {stat(g['bit'], '{:.1f}'):21s} "
+              f"{rise:>8s} {fall:>8s} {min(g['short']):11.0f} {g['stop_bad']:10d}")
+    print("\nSteigend und fallend: mittlere Abweichung der Flanken vom Bitraster des Bytes.")
+    print("Beispiele: je Byte der Wert und der Abstand zum Byte davor in Bit, danach die Pulse in Bit (L = Low, H = High)")
+    for name in sorted(groups, key=lambda k: -groups[k]["n"]):
+        for now, first, st, seg in groups[name]["examples"]:
+            gaps = [""] + [f"{(b - a) / BIT_NS:.2f}" for a, b in zip(st, st[1:])]
+            print(f"\n{name}  {now}")
+            print("  " + " ".join(f"{v:02x}" + (f"(+{gp})" if gp else "") for v, gp in zip(first, gaps)))
+            print("  " + " ".join(f"{'H' if lvl else 'L'}{dur / BIT_NS:.2f}" for lvl, dur in seg[:120]))
+    return 0
+
+
 # ---------------------------------------------------------------------- Selbsttest
 def selftest() -> int:
     sync = bytes.fromhex("8383FD0255511802 97FF")           # Beispiel aus esp32ess
@@ -283,6 +425,13 @@ def selftest() -> int:
     # LED-Rahmen: Lage laut ve.bus-library, frame[4]=41, frame[5]=10 ...
     led = bytes([0x10, 0x01, 0x00, 0x02, 0x80, 0x2C, 0x01, 0xA0, 0x00, 0xA0, 0x00, 0x30])
     assert "I_max=16.0" in decode_led(led) and "switch=30" in decode_led(led)
+    # Flanken: 8N1 dicht an dicht, mit zwei Stoppbits und mit einer Pause nach dem 0x55
+    for stop, gap, want in ((1, None, [10.0] * 9), (2, None, [11.0] * 9), (1, {4: 3}, [10.0] * 4 + [13.0] + [10.0] * 4)):
+        d = edge_decode(edge_segments(edge_wave(sync, stop, gap)))
+        assert bytes(d["bytes"]) == sync and d["stop_bad"] == 0, d
+        got = [(b - a) / BIT_NS for a, b in zip(d["starts"], d["starts"][1:])]
+        assert all(abs(x - y) < 0.02 for x, y in zip(got, want)), got
+        assert abs(d["fit"][0] / d["fit"][1] - BIT_NS) < 5, d["fit"]
 
     # Ende-zu-Ende: gleiches Datensatzformat wie vebus_sniffer.h ueber echtes TCP
     import tempfile
@@ -323,6 +472,9 @@ def main(argv: list[str]) -> int:
                    help="nur Werkbank: Befehle an die Firmware, z. B. '0=L1 R0,20=De4,40=A' (Sekunde=Text)")
     a = sub.add_parser("analyze")
     a.add_argument("file")
+    e = sub.add_parser("edges")
+    e.add_argument("file")
+    e.add_argument("--examples", type=int, default=2, help="Beispiele je Rahmenart")
     sub.add_parser("selftest")
     args = ap.parse_args(argv)
     try:
@@ -335,6 +487,8 @@ def main(argv: list[str]) -> int:
         return capture(args.host, args.port, Path(name), args.seconds, script)
     if args.cmd == "analyze":
         return analyze(Path(args.file))
+    if args.cmd == "edges":
+        return edges(Path(args.file), args.examples)
     return selftest()
 
 
