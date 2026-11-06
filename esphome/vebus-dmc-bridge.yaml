@@ -19,6 +19,7 @@ substitutions:
   vebus_unit_id: "246"
   write_enable: "true"      # freigegeben von Rudi am 05.11.2026 fuer den Schalttest
   live_time: "false"        # Versuch 06.11.2026: Zeitstempel in Sync und E4 aus der eigenen Uhr, ohne Wirkung
+  baud: "256000"           # Versuch 06.11.2026: das DMC sendet mit etwa 250900 Baud; zur Laufzeit Befehl B<n>
   fc_reply: "0"             # Antwort auf FC 0F: 0 keine, 1 Rahmen 38, 2 sofort Sync und 38 (beides loest nur weitere FC 0F aus)
 
 esphome:
@@ -32,7 +33,7 @@ esphome:
   on_boot:
     priority: -100
     then:
-      - lambda: vebus_dmc_bridge::start(${rx_pin}, ${tx_pin}, "${gx_ip}", ${vebus_unit_id}, ${write_enable}, ${live_time}, ${fc_reply});
+      - lambda: vebus_dmc_bridge::start(${rx_pin}, ${tx_pin}, "${gx_ip}", ${vebus_unit_id}, ${write_enable}, ${live_time}, ${fc_reply}, ${baud});
 
 esp32:
   board: esp32dev

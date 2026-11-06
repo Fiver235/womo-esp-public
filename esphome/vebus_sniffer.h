@@ -43,6 +43,7 @@ inline std::atomic<bool> g_client{false};
 inline RingbufHandle_t g_ring = nullptr;
 inline QueueHandle_t g_events = nullptr;
 inline int g_rx_pin = 16;
+inline int g_baud = BAUD;  // die Werkbank-Firmware kann eine andere Baudrate vorgeben
 inline void (*g_on_frame)(const uint8_t *frame, size_t len) = nullptr;  // nur fuer den Werkbanktest, sonst leer
 // Textbefehl vom Mitschnitt-Client (nur Werkbank, fuer Versuche ohne Neuflashen), sonst leer
 inline void (*g_on_command)(const char *text) = nullptr;
@@ -63,7 +64,7 @@ inline void push_record(uint32_t ts, uint8_t flags, const uint8_t *data, size_t 
 inline void rx_task(void *) {
   // Treiber in dieser Task installieren: Der Interrupt laeuft dann auf Kern 1, weg vom WLAN.
   uart_config_t cfg = {};
-  cfg.baud_rate = BAUD;
+  cfg.baud_rate = g_baud;
   cfg.data_bits = UART_DATA_8_BITS;
   cfg.parity = UART_PARITY_DISABLE;
   cfg.stop_bits = UART_STOP_BITS_1;
@@ -77,7 +78,7 @@ inline void rx_task(void *) {
   // Kurzer Timeout: Das Rahmenende (Pause auf dem Bus) loest das Ereignis aus, daraus der Zeitstempel.
   uart_set_rx_full_threshold(PORT, 32);
   uart_set_rx_timeout(PORT, 3);
-  ESP_LOGI(TAG, "UART2 RX GPIO%d, %d 8N1, nur Empfang", g_rx_pin, BAUD);
+  ESP_LOGI(TAG, "UART2 RX GPIO%d, %d 8N1, nur Empfang", g_rx_pin, g_baud);
 
   uint8_t frame[MAX_FRAME];
   uint8_t chunk[256];

@@ -247,7 +247,8 @@ Ablauf:
 
 - **Bitdauer des DMC: 3985 ns, also etwa 250 900 Baud**, nicht 256 000. Der ESP sendet mit 3906 ns je Bit und ist damit 2 % schneller. Ein UART verträgt das bei Datenrahmen. Ob das DMC die Bitdauer im Sync (Byte `55`) enger prüft, ist die naheliegende nächste Frage.
 - **Pause nach der Adresse:** Zwischen dem 2. und 3. Byte liegen 13 statt 10 Bit, also 3 Bit Pause. Alle anderen Bytes folgen dicht an dicht.
-- **Fehler der Messfirmware:** Der UART empfängt neben der RMT-Einheit am selben Pin nichts mehr (0 Bytes). Die Flanken reichen für die Auswertung, die Zeilen `F` fehlen aber. Vor der Messung am VE.Bus beheben oder bewusst nur mit den Flanken arbeiten.
+- **Fehler der Messfirmware, behoben:** Der UART empfing neben der RMT-Einheit am selben Pin nichts mehr. GPIO16 ist der feste Pin von U2RXD, die RMT-Einheit schaltete ihn auf GPIO um. Der UART bekommt sein Signal jetzt über die GPIO-Matrix. Zweiter Lauf: 50 Zeilen `F`, 47 Zeilen `E`, alle fehlerfrei.
+- **Versuch mit 250 000 und 251 000 Baud in der DMC-Firmware** (`logs/vebus-20261106-baud.log`, Befehl `B<n>`): ohne Wirkung, weiter rund 100 `FC 0F` pro Sekunde. Bei 250 000 Baud sendet das DMC seinen Rahmen `40` häufiger, etwa 10-mal pro Sekunde. Die Vorgabe bleibt bei 256 000.
 
 Gesucht wird alles, worin sich der Sync von den Datenrahmen oder vom Signal des ESP unterscheidet: Pausen zwischen den Bytes, ein zweites Stoppbit, zusätzliche Pulse, eine andere Bitdauer. Der ESP sendet 8N1 ohne Pausen mit 3906 ns je Bit. Die Auswertung ist bisher nur mit künstlichen Daten geprüft (`selftest`).
 

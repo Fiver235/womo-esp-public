@@ -16,6 +16,8 @@
 
 #include "driver/rmt_rx.h"
 #include "esp_random.h"
+#include "esp_rom_gpio.h"
+#include "soc/gpio_sig_map.h"
 
 #include "vebus_sniffer.h"
 
@@ -74,6 +76,11 @@ inline void task(void *) {
     return;
   }
   gpio_set_pull_mode((gpio_num_t) g_pin, GPIO_PULLUP_ONLY);  // wie in vebus_sniffer.h
+  // GPIO16 ist der feste Pin von U2RXD. Der UART nimmt ihn deshalb direkt, ohne die GPIO-Matrix, und die RMT-Einheit
+  // schaltet den Pin beim Einrichten auf GPIO um: Der UART empfing danach nichts mehr (erster Lauf 06.11.2026).
+  // Hier bekommt der UART sein Signal wieder, diesmal ueber die Matrix wie die RMT-Einheit.
+  static_assert(vebus_sniffer::PORT == UART_NUM_2, "Signalnummer unten gilt fuer UART2");
+  esp_rom_gpio_connect_in_signal((uint32_t) g_pin, U2RXD_IN_IDX, false);
   ESP_LOGI(TAG, "Flanken auf GPIO%d, 25 ns, jeder %d. Rahmen", g_pin, g_every.load());
 
   rmt_receive_config_t rx = {};

@@ -48,7 +48,8 @@ inline int g_tx_pin = 17;
 // g_live_time: Sync alle 20 ms im eigenen Raster, Zeitstempel in Sync und E4 aus der eigenen Uhr statt aus der
 //              Aufzeichnung. g_fc_reply: 0 keine Antwort auf FC 0F, 1 Rahmen 38, 2 sofort Sync und danach 38.
 // Zur Laufzeit umschaltbar ueber Textbefehle vom Mitschnitt-Client (tools/vebus_capture.py --script):
-//   L0 L1 = g_live_time, R0 R1 R2 = g_fc_reply, Dxx = Rahmentyp xx (hex) nicht senden, Uxx = wieder senden, A = alle.
+//   L0 L1 = g_live_time, R0 R1 R2 = g_fc_reply, Dxx = Rahmentyp xx (hex) nicht senden, Uxx = wieder senden, A = alle,
+//   B<n> = Baudrate, O<n> = Abstand der Sync-Zeit.
 inline std::atomic<int> g_live_time{0};
 inline std::atomic<int> g_fc_reply{1};
 inline std::atomic<bool> g_drop[256];
@@ -287,6 +288,13 @@ inline void on_command(const char *text) {
       const char hex[3] = {p[1], p[2], 0};
       g_drop[strtoul(hex, nullptr, 16) & 0xFF] = (c == 'D');
       p += 2;
+    } else if (c == 'B') {
+      const int baud = (int) strtol(p + 1, nullptr, 10);
+      if (baud >= 200000 && baud <= 300000) {
+        uart_set_baudrate(vebus_sniffer::PORT, (uint32_t) baud);
+        vebus_sniffer::g_baud = baud;
+      }
+      while (p[1] >= '0' && p[1] <= '9') p++;
     } else if (c == 'O') {
       g_sync_off = (int) strtol(p + 1, nullptr, 10);
       while (p[1] >= '0' && p[1] <= '9') p++;
@@ -294,7 +302,8 @@ inline void on_command(const char *text) {
       for (auto &d : g_drop) d = false;
     }
   }
-  ESP_LOGW(TAG, "Befehl '%s': eigene Zeitbasis %d, Antwort auf FC 0F %d", text, g_live_time.load(), g_fc_reply.load());
+  ESP_LOGW(TAG, "Befehl '%s': eigene Zeitbasis %d, Antwort auf FC 0F %d, %d Baud", text, g_live_time.load(),
+           g_fc_reply.load(), vebus_sniffer::g_baud);
 }
 
 inline void tx_task(void *) {
@@ -578,7 +587,8 @@ inline void gx_task(void *) {
 }
 
 inline void start(int rx_pin, int tx_pin, const char *gx_ip, uint8_t unit, bool write_enable, bool live_time,
-                  int fc_reply) {
+                  int fc_reply, int baud) {
+  vebus_sniffer::g_baud = baud;
   g_live_time = live_time;
   g_fc_reply = fc_reply;
   g_tx_pin = tx_pin;
