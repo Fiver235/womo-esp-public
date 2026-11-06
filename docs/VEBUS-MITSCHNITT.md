@@ -236,11 +236,11 @@ Für die Versuche lässt sich die Firmware über den Mitschnitt-Port umschalten,
 
 Ablauf:
 
-1. Noch auf der Werkbank flashen: `.\.venv\Scripts\esphome.exe run esphomeebus-sniffer-edges.yaml --device 192.168.100.210`. Danach sendet der ESP nichts mehr, das DMC wird still.
+1. Noch auf der Werkbank flashen: `.\.venv\Scripts\esphome.exe run esphome\vebus-sniffer-edges.yaml --device 192.168.100.210`. Danach sendet der ESP nichts mehr, das DMC wird still.
 2. Powerbank vom ESP ab, Labornetzteil aus.
 3. Umverdrahten wie in „Verdrahtung“ oben: TXD des Wandlers von der Diode weg fest an VCC, A, B und GND an den VE.Bus. Das DMC hängt dabei nicht am Wandler und nicht am VE.Bus.
-4. Powerbank an. Aufzeichnen: `python toolsebus_capture.py capture --seconds 120`.
-5. Auswerten: `python toolsebus_capture.py edges logs\<datei>.log`. Die Tabelle zeigt je Rahmenart den Abstand der Bytes in Bit (8N1 ohne Pause = 10,00), die Bitdauer, die Lage der Flanken zum Bitraster und den kürzesten Puls. Darunter stehen Beispiele mit allen Pulsen.
+4. Powerbank an. Aufzeichnen: `python tools\vebus_capture.py capture --seconds 120`.
+5. Auswerten: `python tools\vebus_capture.py edges logs\<datei>.log`. Die Tabelle zeigt je Rahmenart den Abstand der Bytes in Bit (8N1 ohne Pause = 10,00), die Bitdauer, die Lage der Flanken zum Bitraster und den kürzesten Puls. Darunter stehen Beispiele mit allen Pulsen.
 6. Zurück auf die Werkbank: Verdrahtung aus „Werkbanktest“, `vebus-dmc-bridge.yaml` flashen.
 
 Gesucht wird alles, worin sich der Sync von den Datenrahmen oder vom Signal des ESP unterscheidet: Pausen zwischen den Bytes, ein zweites Stoppbit, zusätzliche Pulse, eine andere Bitdauer. Der ESP sendet 8N1 ohne Pausen mit 3906 ns je Bit. Die Auswertung ist bisher nur mit künstlichen Daten geprüft (`selftest`).
