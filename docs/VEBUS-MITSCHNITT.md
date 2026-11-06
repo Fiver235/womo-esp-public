@@ -243,6 +243,12 @@ Ablauf:
 5. Auswerten: `python tools\vebus_capture.py edges logs\<datei>.log`. Die Tabelle zeigt je Rahmenart den Abstand der Bytes in Bit (8N1 ohne Pause = 10,00), die Bitdauer, die Lage der Flanken zum Bitraster und den kürzesten Puls. Darunter stehen Beispiele mit allen Pulsen.
 6. Zurück auf die Werkbank: Verdrahtung aus „Werkbanktest“, `vebus-dmc-bridge.yaml` flashen.
 
+**Erster Lauf auf der Werkbank, 06.11.2026** (`logs/vebus-20261106-edges-bench.log`, lokal): Die Messfirmware lief kurz am DMC, bevor umverdrahtet wurde. Ohne Bus sendet das DMC alle 500 ms nur seinen Rahmen `40`. 38 Rahmen, alle mit gültiger Prüfsumme dekodiert:
+
+- **Bitdauer des DMC: 3985 ns, also etwa 250 900 Baud**, nicht 256 000. Der ESP sendet mit 3906 ns je Bit und ist damit 2 % schneller. Ein UART verträgt das bei Datenrahmen. Ob das DMC die Bitdauer im Sync (Byte `55`) enger prüft, ist die naheliegende nächste Frage.
+- **Pause nach der Adresse:** Zwischen dem 2. und 3. Byte liegen 13 statt 10 Bit, also 3 Bit Pause. Alle anderen Bytes folgen dicht an dicht.
+- **Fehler der Messfirmware:** Der UART empfängt neben der RMT-Einheit am selben Pin nichts mehr (0 Bytes). Die Flanken reichen für die Auswertung, die Zeilen `F` fehlen aber. Vor der Messung am VE.Bus beheben oder bewusst nur mit den Flanken arbeiten.
+
 Gesucht wird alles, worin sich der Sync von den Datenrahmen oder vom Signal des ESP unterscheidet: Pausen zwischen den Bytes, ein zweites Stoppbit, zusätzliche Pulse, eine andere Bitdauer. Der ESP sendet 8N1 ohne Pausen mit 3906 ns je Bit. Die Auswertung ist bisher nur mit künstlichen Daten geprüft (`selftest`).
 
 **Noch offen vor dem Einbau:** die häufigen `FC 0F` (Ursache eingegrenzt, siehe oben), die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.

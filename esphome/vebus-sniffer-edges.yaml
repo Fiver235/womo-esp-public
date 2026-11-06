@@ -17,6 +17,7 @@ substitutions:
   friendly_name: "VE.Bus Sniffer"
   rx_pin: "16"              # GPIO16 <- Modulausgang ueber Teiler 1k/2k (5 V -> 3,3 V)
   edges_every: "3"          # Flanken von jedem 3. Rahmen (zufaellig), 0 = aus; zur Laufzeit per Befehl E<n>
+  tx_guard_pin: "17"        # bleibt dauerhaft High, siehe on_boot
 
 esphome:
   name: ${name}
@@ -25,11 +26,18 @@ esphome:
     - vebus_sniffer.h
     - vebus_edges.h
   on_boot:
-    priority: -100          # nach dem Netzwerk-Stack
-    then:
-      - lambda: |-
-          vebus_sniffer::start(${rx_pin});
-          vebus_edges::start(${rx_pin}, ${edges_every});
+    - priority: 800         # so frueh wie moeglich
+      then:
+        # Sicherung: Haengt TXD des Wandlers noch ueber die Diode an GPIO17 (Werkbankaufbau), haelt High den
+        # Sender aus. Ersetzt nicht "TXD fest an VCC": Waehrend des Bootens ist der Pin kurz offen.
+        - lambda: |-
+            gpio_set_direction((gpio_num_t) ${tx_guard_pin}, GPIO_MODE_OUTPUT);
+            gpio_set_level((gpio_num_t) ${tx_guard_pin}, 1);
+    - priority: -100        # nach dem Netzwerk-Stack
+      then:
+        - lambda: |-
+            vebus_sniffer::start(${rx_pin});
+            vebus_edges::start(${rx_pin}, ${edges_every});
 
 esp32:
   board: esp32dev
