@@ -121,8 +121,11 @@ def read_record(sock: socket.socket) -> tuple[int, int, bytes]:
     return ts, flags, read_exact(sock, length)
 
 
-def capture(host: str, port: int, out: Path, seconds: float | None) -> int:
-    """Zeichnet auf und verbindet neu: Bei VE.Bus-Versorgung kann der ESP im Aus-Zustand stromlos werden."""
+def capture(host: str, port: int, out: Path, seconds: float | None, script: list | None = None) -> int:
+    """Zeichnet auf und verbindet neu: Bei VE.Bus-Versorgung kann der ESP im Aus-Zustand stromlos werden.
+
+    script: Liste (Sekunden ab Start, Text). Der Text geht als Befehl an die Werkbank-Firmware (Versuche)."""
+    script = sorted(script or [])
     out.parent.mkdir(parents=True, exist_ok=True)
     print(f"Schreibe nach {out}, Ende mit Strg+C")
     seen: dict[tuple, bytes] = {}
@@ -160,6 +163,16 @@ def capture(host: str, port: int, out: Path, seconds: float | None) -> int:
                                       f"{bad} Pruefsummenfehler")
                                 log.write(f"# stats {now} {f} {s} {b} {ue} {ov} {dr}\n")
                                 next_status = time.monotonic() + 5
+                            continue
+                        while script and time.monotonic() - start >= script[0][0]:
+                            text = script.pop(0)[1]
+                            sock.sendall(text.encode("ascii"))
+                            print(f"{now} Befehl an den ESP: {text}")
+                        if flags == 4:  # vom ESP selbst gesendet (Werkbank), nur ins Log
+                            log.write(f"{now} {ts} T {data.hex()}\n")
+                            continue
+                        if flags == 5:  # Befehl, vom ESP bestaetigt
+                            log.write(f"# cmd {now} {ts} {data.decode('ascii', 'replace')}\n")
                             continue
                         log.write(f"{now} {ts} {'C' if flags else 'F'} {data.hex()}\n")
                         frames += 1
@@ -306,6 +319,8 @@ def main(argv: list[str]) -> int:
     c.add_argument("--port", type=int, default=8484)
     c.add_argument("-o", "--out")
     c.add_argument("--seconds", type=float)
+    c.add_argument("--script", default="",
+                   help="nur Werkbank: Befehle an die Firmware, z. B. '0=L1 R0,20=De4,40=A' (Sekunde=Text)")
     a = sub.add_parser("analyze")
     a.add_argument("file")
     sub.add_parser("selftest")
@@ -316,7 +331,8 @@ def main(argv: list[str]) -> int:
         pass
     if args.cmd == "capture":
         name = args.out or str(ROOT / "logs" / f"vebus-{dt.datetime.now():%Y%m%d-%H%M%S}.log")
-        return capture(args.host, args.port, Path(name), args.seconds)
+        script = [(float(t), text) for t, text in (item.split("=", 1) for item in args.script.split(",") if item)]
+        return capture(args.host, args.port, Path(name), args.seconds, script)
     if args.cmd == "analyze":
         return analyze(Path(args.file))
     return selftest()

@@ -43,6 +43,8 @@ inline RingbufHandle_t g_ring = nullptr;
 inline QueueHandle_t g_events = nullptr;
 inline int g_rx_pin = 16;
 inline void (*g_on_frame)(const uint8_t *frame, size_t len) = nullptr;  // nur fuer den Werkbanktest, sonst leer
+// Textbefehl vom Mitschnitt-Client (nur Werkbank, fuer Versuche ohne Neuflashen), sonst leer
+inline void (*g_on_command)(const char *text) = nullptr;
 
 inline void push_record(uint32_t ts, uint8_t flags, const uint8_t *data, size_t len) {
   uint8_t rec[HEADER_LEN + MAX_FRAME];
@@ -195,8 +197,19 @@ inline void tcp_task(void *) {
         push_stats();  // auch bei stillem Bus: So faellt ein toter Client auf
         next_stats = esp_timer_get_time() + 1000000;
       }
+      if (g_on_command != nullptr) {
+        char cmd[64];
+        const int r = lwip_recv(fd, cmd, sizeof(cmd) - 1, MSG_DONTWAIT);
+        if (r > 0) {
+          cmd[r] = 0;
+          push_record((uint32_t) esp_timer_get_time(), 5, reinterpret_cast<const uint8_t *>(cmd), (size_t) r);
+          g_on_command(cmd);
+        } else if (r == 0) {
+          break;  // Client hat geschlossen
+        }
+      }
       size_t size = 0;
-      void *item = xRingbufferReceive(g_ring, &size, pdMS_TO_TICKS(200));
+      void *item = xRingbufferReceive(g_ring, &size, pdMS_TO_TICKS(g_on_command != nullptr ? 20 : 200));
       if (item == nullptr) continue;
       const bool ok = send_all(fd, static_cast<const uint8_t *>(item), size);
       vRingbufferReturnItem(g_ring, item);

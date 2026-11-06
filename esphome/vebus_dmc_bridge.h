@@ -20,6 +20,8 @@
 #include "lwip/inet.h"
 #include "lwip/sockets.h"
 
+#include "hal/uart_ll.h"
+
 #include "vebus_dmc_bench.h"
 
 namespace vebus_dmc_bridge {
@@ -42,6 +44,16 @@ inline const char *g_gx_ip = "";
 inline uint8_t g_unit = 246;
 inline bool g_write_enable = false;
 inline int g_tx_pin = 17;
+// Versuche zur FC-0F-Flut, gesetzt aus der YAML:
+// g_live_time: Sync alle 20 ms im eigenen Raster, Zeitstempel in Sync und E4 aus der eigenen Uhr statt aus der
+//              Aufzeichnung. g_fc_reply: 0 keine Antwort auf FC 0F, 1 Rahmen 38, 2 sofort Sync und danach 38.
+// Zur Laufzeit umschaltbar ueber Textbefehle vom Mitschnitt-Client (tools/vebus_capture.py --script):
+//   L0 L1 = g_live_time, R0 R1 R2 = g_fc_reply, Dxx = Rahmentyp xx (hex) nicht senden, Uxx = wieder senden, A = alle.
+inline std::atomic<int> g_live_time{0};
+inline std::atomic<int> g_fc_reply{1};
+inline std::atomic<bool> g_drop[256];
+inline std::atomic<int> g_sync_off{945};  // Befehl O<n>: Sync-Zeit minus angekuendigte Zeit aus E4, am echten Bus 910..956
+inline TaskHandle_t g_tx_handle = nullptr;
 
 // Vom GX
 inline std::atomic<uint16_t> g_gx_limit{0}, g_gx_state{0}, g_gx_mode{0};
@@ -100,6 +112,7 @@ inline void on_frame(const uint8_t *frame, size_t len) {
   if (frame[2] == 0xFC && frame[4] == 0x0F) {
     g_fc0f++;
     g_want_38 = true;
+    if (g_tx_handle != nullptr) xTaskNotifyGive(g_tx_handle);  // weckt die Sendetask fuer die Antwort
   }
 }
 
@@ -193,11 +206,99 @@ inline void send_frame(const uint8_t *head, size_t len) {
   const uint8_t nr = g_next_nr.load();
   const size_t n = build(head, len, nr, out);
   uart_write_bytes(vebus_sniffer::PORT, out, n);
+  vebus_sniffer::push_record((uint32_t) esp_timer_get_time(), 4, out, n);  // eigener Rahmen in den Mitschnitt (T)
   g_next_nr = (nr + 1) & 0x7F;
   g_sent++;
 }
 
+// Uhr des MultiPlus: 24 Bit, 0,4 us je Schritt (2,5 MHz). Der Sync traegt die Zeit seines Endes, im Mitschnitt
+// immer 969 Schritte nach der Zeit, die der Rahmen E4 davor als Beginn der naechsten Periode ankuendigt.
+static constexpr int64_t PERIOD_US = 20000;
+static constexpr int64_t E4_BEFORE_SYNC_US = 4600;
+
+inline uint32_t ticks24(int64_t us) { return (uint32_t) ((us * 5 / 2) & 0xFFFFFF); }
+
+// Sendet den Sync zeitgenau: Start bei target_us (oder sofort, wenn das schon vorbei ist). Der MultiPlus haelt den
+// in E4 angekuendigten Zeitpunkt auf etwa 1 us ein, das DMC zaehlt einen Sync sonst nicht mit.
+inline void send_sync_now(int64_t target_us) {
+  static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
+  uint8_t h[16];
+  wait_bus_idle();
+  int64_t start = esp_timer_get_time() + 40;  // Zeit zum Bauen des Rahmens
+  if (target_us > start) start = target_us;
+  const uint32_t t = (ticks24(start) + (uint32_t) g_sync_off.load()) & 0xFFFFFF;
+  size_t n = 0;
+  h[n++] = 0x83;
+  h[n++] = 0x83;
+  h[n++] = 0xFD;
+  h[n++] = 0x00;
+  h[n++] = 0x55;
+  n = put(h, n, (uint8_t) t);
+  n = put(h, n, (uint8_t) (t >> 8));
+  n = put(h, n, (uint8_t) (t >> 16));
+  uint8_t out[24];
+  const uint8_t nr = g_next_nr.load();
+  const size_t m = build(h, n, nr, out);
+  portENTER_CRITICAL(&mux);
+  while (esp_timer_get_time() < start) {
+  }
+  uart_ll_write_txfifo(UART_LL_GET_HW(vebus_sniffer::PORT), out, m);
+  portEXIT_CRITICAL(&mux);
+  vebus_sniffer::push_record((uint32_t) start, 4, out, m);
+  g_next_nr = (nr + 1) & 0x7F;
+  g_sent++;
+}
+
+// E4 aus der Aufzeichnung, Periode und angekuendigte Zeit ersetzt.
+inline size_t head_e4_live(const uint8_t *rec, size_t len, int64_t next_sync_us, uint8_t *h) {
+  uint8_t plain[32];
+  size_t k = 0;
+  for (size_t i = 4; i < len && k < sizeof(plain); i++) {
+    if (rec[i] == 0xFA && i + 1 < len) {
+      plain[k++] = (uint8_t) (rec[++i] + 0x80);
+    } else {
+      plain[k++] = rec[i];
+    }
+  }
+  if (k >= 7) {
+    const uint32_t t = ticks24(next_sync_us);
+    plain[2] = 0x50;  // Periode 50000 Schritte = 20 ms
+    plain[3] = 0xC3;
+    plain[4] = (uint8_t) t;
+    plain[5] = (uint8_t) (t >> 8);
+    plain[6] = (uint8_t) (t >> 16);
+  }
+  size_t n = 0;
+  h[n++] = 0x83;
+  h[n++] = 0x83;
+  h[n++] = 0xFE;
+  h[n++] = 0x00;
+  for (size_t i = 0; i < k; i++) n = put(h, n, plain[i]);
+  return n;
+}
+
+inline void on_command(const char *text) {
+  for (const char *p = text; *p != 0; p++) {
+    const char c = *p;
+    if ((c == 'L' || c == 'R') && p[1] >= '0' && p[1] <= '9') {
+      (c == 'L' ? g_live_time : g_fc_reply) = p[1] - '0';
+      p++;
+    } else if ((c == 'D' || c == 'U') && p[1] != 0 && p[2] != 0) {
+      const char hex[3] = {p[1], p[2], 0};
+      g_drop[strtoul(hex, nullptr, 16) & 0xFF] = (c == 'D');
+      p += 2;
+    } else if (c == 'O') {
+      g_sync_off = (int) strtol(p + 1, nullptr, 10);
+      while (p[1] >= '0' && p[1] <= '9') p++;
+    } else if (c == 'A') {
+      for (auto &d : g_drop) d = false;
+    }
+  }
+  ESP_LOGW(TAG, "Befehl '%s': eigene Zeitbasis %d, Antwort auf FC 0F %d", text, g_live_time.load(), g_fc_reply.load());
+}
+
 inline void tx_task(void *) {
+  g_tx_handle = xTaskGetCurrentTaskHandle();
   while (!uart_is_driver_installed(vebus_sniffer::PORT)) vTaskDelay(pdMS_TO_TICKS(10));
   vTaskDelay(pdMS_TO_TICKS(vebus_dmc_bench::LISTEN_MS));
   if (g_multiplus_seen.load() > 0) {
@@ -215,15 +316,47 @@ inline void tx_task(void *) {
   uint8_t head[32];
   size_t pos = 0;
   int64_t due = esp_timer_get_time();
-  int64_t last_38 = 0;
+  int64_t sync_due = due + PERIOD_US;  // nur mit g_live_time
+  int64_t last_38 = 0, last_reply = 0;
   for (;;) {
     const uint8_t *entry = vebus_dmc_replay::DATA + pos;
     const uint16_t delta = (uint16_t) (entry[0] | (entry[1] << 8));
     const uint8_t len = entry[2];
     const uint8_t *rec = entry + 3;
+    const bool is_sync = len >= 5 && rec[2] == 0xFD && rec[4] == 0x55;
+    const bool is_e4 = len >= 5 && rec[2] == 0xFE && rec[4] == 0xE4;
     due += (int64_t) delta * 100;
-    wait_until(due);
-    if (len >= 5 && rec[2] == 0xFE && rec[4] == 0x41) {
+    if (g_live_time && is_sync) due = sync_due - 420;  // Vorlauf fuer die Ruhepruefung (300 us) in send_sync_now
+    if (g_live_time && is_e4) due = sync_due - E4_BEFORE_SYNC_US;
+    // Warten, dabei sofort auf FC 0F antworten (Versuch 2: wie der MultiPlus beim Busstart mit Sync und 38)
+    for (;;) {
+      const int64_t left = due - esp_timer_get_time();
+      if (left <= 0) break;
+      if (left > 1000) {
+        ulTaskNotifyTake(pdTRUE, 1);
+      } else {
+        esp_rom_delay_us((uint32_t) left);
+      }
+      if (g_fc_reply == 2 && g_want_38.exchange(false)) {
+        const int64_t now = esp_timer_get_time();
+        if (now - last_reply > 10000) {
+          send_sync_now(0);
+          send_frame(HEAD_38, sizeof(HEAD_38));
+          g_sent38++;
+          last_reply = now;
+        }
+      }
+    }
+    if (len >= 5 && rec[2] == 0xFE && g_drop[rec[4]].load()) {
+      // Versuch: diesen Rahmentyp auslassen
+    } else if (g_live_time && is_sync) {
+      send_sync_now(sync_due);
+      sync_due += PERIOD_US;
+      if (sync_due < esp_timer_get_time()) sync_due = esp_timer_get_time() + PERIOD_US;
+    } else if (g_live_time && is_e4) {
+      const size_t n = head_e4_live(rec, len, sync_due, head);
+      send_frame(head, n);
+    } else if (len >= 5 && rec[2] == 0xFE && rec[4] == 0x41) {
       const size_t n = head_41(head);
       send_frame(head, n);
     } else {
@@ -235,9 +368,7 @@ inline void tx_task(void *) {
       g_loops++;
     }
     const int64_t now = esp_timer_get_time();
-    if (g_want_38.exchange(false) && now - last_38 > 200000) {
-      uart_wait_tx_done(vebus_sniffer::PORT, pdMS_TO_TICKS(5));
-      esp_rom_delay_us(300);
+    if (g_fc_reply == 1 && g_want_38.exchange(false) && now - last_38 > 200000) {
       send_frame(HEAD_38, sizeof(HEAD_38));
       g_sent38++;
       last_38 = now;
@@ -446,7 +577,10 @@ inline void gx_task(void *) {
   }
 }
 
-inline void start(int rx_pin, int tx_pin, const char *gx_ip, uint8_t unit, bool write_enable) {
+inline void start(int rx_pin, int tx_pin, const char *gx_ip, uint8_t unit, bool write_enable, bool live_time,
+                  int fc_reply) {
+  g_live_time = live_time;
+  g_fc_reply = fc_reply;
   g_tx_pin = tx_pin;
   g_gx_ip = gx_ip;
   g_unit = unit;
@@ -454,10 +588,12 @@ inline void start(int rx_pin, int tx_pin, const char *gx_ip, uint8_t unit, bool 
   gpio_set_direction((gpio_num_t) tx_pin, GPIO_MODE_OUTPUT);
   gpio_set_level((gpio_num_t) tx_pin, 1);  // Ruhepegel bis zum Senden
   vebus_sniffer::g_on_frame = on_frame;
+  vebus_sniffer::g_on_command = on_command;
   vebus_sniffer::start(rx_pin);
   xTaskCreatePinnedToCore(tx_task, "vebus_tx", 4096, nullptr, configMAX_PRIORITIES - 3, nullptr, 1);
   xTaskCreatePinnedToCore(gx_task, "vebus_gx", 4096, nullptr, 4, nullptr, 0);
-  ESP_LOGW(TAG, "Schreiben auf den GX ist %s", write_enable ? "AN" : "aus");
+  ESP_LOGW(TAG, "Schreiben auf den GX ist %s, eigene Zeitbasis %s, Antwort auf FC 0F: %d", write_enable ? "AN" : "aus",
+           live_time ? "an" : "aus", fc_reply);
 }
 
 inline void log_stats() {

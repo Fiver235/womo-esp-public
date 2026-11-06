@@ -208,7 +208,31 @@ Jeder Schreibbefehl war nach etwa 50 ms bestätigt, ohne Fehlversuch. Home Assis
 
 80 µs waren zu kurz. Das DMC sendet `FC 0F` in Paketen mit etwa 0,1 ms Pause, und der ESP drängte sich in diese Lücken. Mit 300 µs ist das Blinken weg. Die Flut `FC 0F` bleibt.
 
-**Noch offen vor dem Einbau:** die häufigen `FC 0F`, die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
+**Ursachensuche `FC 0F`, 06.11.2026.** Die Firmware schreibt jetzt auch die selbst gesendeten Rahmen in den Mitschnitt (Zeilenart `T`), damit beide Seiten in einer Zeitachse stehen. Mitschnitte lokal: `logs/vebus-20261106-*.log`.
+
+Was die Mitschnitte belegen:
+
+- **Die gestörten Rahmen sind eine Folge der Flut.** Sie entstehen dort, wo ESP und DMC gleichzeitig senden. Ohne Flut sendet das DMC nur alle 500 ms.
+- **`FC 0F a b` meldet eine Lücke in den Rahmennummern:** `a` ist die erste Nummer, die dem DMC fehlt (nach einem eigenen Rahmen dessen Nummer), `b` die Nummer des gerade empfangenen Datenrahmens. Eine Meldung kommt 0,1 bis 0,2 ms nach dem ersten Datenrahmen, der auf einen Sync folgt. Folgt ein Datenrahmen ohne Sync dazwischen, kommt keine Meldung. Oft wiederholt das DMC danach eine ältere Meldung.
+- **Das DMC zählt den Sync des ESP nicht mit.** Am echten Bus trägt ein Rahmen des DMC direkt nach einem Sync dessen Nummer plus 1 (541 von 541 Fällen). Auf der Werkbank trägt er die Nummer des Sync selbst oder eine kleinere (134 von 138 Fällen, mit aufgezeichneter und mit eigener Zeitbasis). Aus Sicht des DMC fehlt damit in jedem 20-ms-Takt eine Nummer, und es meldet sie. Am echten Bus kommt `FC 0F` nur beim Busstart und beim Dazukommen eines Geräts vor.
+- **Aufbau der Zeitangaben:** Die Uhr des MultiPlus hat 24 Bit und zählt in Schritten von 0,4 µs. Der Sync trägt sie als `55 lo mid hi`. `E4` trägt als Bytes 2–3 die Periode (50000 im Hochlauf, sonst etwa 50048) und als Bytes 4–6 die Zeit, zu der der nächste Sync beginnt. Der Sync selbst trägt diese Zeit plus 910 bis 956 Schritte. Die Abstände der Sync-Zeiten streuen am echten Bus nur um ±2 Schritte.
+- **Das DMC startet zeitweise neu:** Es bleibt gut 5 s still und beginnt dann mit Rahmennummer 00. Gesehen nur mit eigener Zeitbasis (zweimal) und ohne `E4`.
+
+Versuche, alle ohne Wirkung auf die Flut:
+
+| Versuch | Ergebnis |
+|---|---|
+| Zeit in Sync und `E4` aus der eigenen Uhr, Sync im festen 20-ms-Raster | Flut unverändert, etwa 80 pro Sekunde |
+| Sync zusätzlich auf wenige µs genau zum in `E4` angekündigten Zeitpunkt, Abstand 945 und 969 Schritte | unverändert |
+| Auf jedes `FC 0F` sofort Sync und `38 01 C0 C0`, wie der MultiPlus beim Busstart | Das DMC antwortet auf jedes `38` mit weiteren `FC 0F`, die Flut verdoppelt sich |
+| `E4` weglassen, aufgezeichnete Zeit | `FC 0F` hört auf, das DMC sendet aber rund 40 s gar nichts mehr, auch kein `40` |
+| `E4` weglassen, eigene Zeit | `FC 0F` nach jedem anderen Datenrahmen, `40` etwa 10-mal pro Sekunde |
+
+Offen ist damit nur noch, **warum das DMC den Sync des ESP nicht annimmt**. Inhalt, Prüfsumme und Zeitangaben stimmen mit dem echten Sync überein. Der Unterschied muss in etwas liegen, das der UART-Mitschnitt nicht zeigt, zum Beispiel im genauen Signalverlauf. Nächster Schritt: den echten Sync am VE.Bus flankengenau aufzeichnen (Oszilloskop oder der ESP als Logikanalysator) und mit dem Sync des ESP vergleichen.
+
+Für die Versuche lässt sich die Firmware über den Mitschnitt-Port umschalten, ohne neu zu flashen: `tools/vebus_capture.py capture --script "0=L1,30=De4,60=A L0"` (`L0/L1` eigene Zeitbasis, `R0/R1/R2` Antwort auf `FC 0F`, `Dxx/Uxx/A` Rahmentyp auslassen oder wieder senden, `O<n>` Abstand der Sync-Zeit). Die Antwort mit `38` ist jetzt abgeschaltet (`fc_reply: "0"`). **Nicht geklärt:** Beim Flashen im Betrieb mit eigener Zeitbasis ist die Verbindung zum ESP abgerissen, danach war er nicht mehr erreichbar. Der zeitgenaue Sync sperrt kurz die Interrupts, ein Zusammenhang ist möglich. Vor dem Flashen deshalb `L0` senden.
+
+**Noch offen vor dem Einbau:** die häufigen `FC 0F` (Ursache eingegrenzt, siehe oben), die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
 1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.
