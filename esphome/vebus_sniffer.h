@@ -223,11 +223,19 @@ inline void tcp_task(void *) {
   }
 }
 
-inline void start(int rx_pin) {
+// Empfang ohne Netzwerk, darf vor dem WLAN starten
+inline void start_rx(int rx_pin) {
   g_rx_pin = rx_pin;
   g_ring = xRingbufferCreate(RING_SIZE, RINGBUF_TYPE_NOSPLIT);
   xTaskCreatePinnedToCore(rx_task, "vebus_rx", 4096, nullptr, configMAX_PRIORITIES - 2, nullptr, 1);
-  xTaskCreatePinnedToCore(tcp_task, "vebus_tcp", 4096, nullptr, 5, nullptr, 0);
+}
+
+// Mitschnitt-Server, erst nach dem Netzwerk-Stack
+inline void start_tcp() { xTaskCreatePinnedToCore(tcp_task, "vebus_tcp", 4096, nullptr, 5, nullptr, 0); }
+
+inline void start(int rx_pin) {
+  start_rx(rx_pin);
+  start_tcp();
 }
 
 inline void log_stats() {

@@ -283,6 +283,7 @@ inline void send_frame(const uint8_t *head, size_t len) {
 // Uhr des MultiPlus: 24 Bit, 0,4 us je Schritt (2,5 MHz). Der Sync traegt die Zeit seines Endes, im Mitschnitt
 // immer 969 Schritte nach der Zeit, die der Rahmen E4 davor als Beginn der naechsten Periode ankuendigt.
 static constexpr int64_t PERIOD_US = 20000;
+static constexpr uint32_t LISTEN_MS = 300;
 static constexpr int64_t E4_BEFORE_SYNC_US = 4600;
 
 inline uint32_t ticks24(int64_t us) { return (uint32_t) ((us * 5 / 2) & 0xFFFFFF); }
@@ -394,7 +395,9 @@ inline void on_command(const char *text) {
 inline void tx_task(void *) {
   g_tx_handle = xTaskGetCurrentTaskHandle();
   while (!uart_is_driver_installed(vebus_sniffer::PORT)) vTaskDelay(pdMS_TO_TICKS(10));
-  vTaskDelay(pdMS_TO_TICKS(vebus_dmc_bench::LISTEN_MS));
+  // Kurz zuhoeren: Der MultiPlus sendet alle 20 ms, 300 ms reichen fuer die Sperre. Laenger nicht, das DMC haengt
+  // sich bei Stille nach dem Einschalten auf.
+  vTaskDelay(pdMS_TO_TICKS(LISTEN_MS));
   if (g_multiplus_seen.load() > 0) {
     g_blocked = true;
     ESP_LOGE(TAG, "MultiPlus-Rahmen empfangen: Der ESP haengt am echten VE.Bus. Senden gesperrt.");
@@ -770,24 +773,30 @@ inline void gx_task(void *) {
   }
 }
 
-inline void start(int rx_pin, int tx_pin, const char *gx_ip, uint8_t unit, bool write_enable, bool live_time,
-                  int fc_reply, int baud) {
+// Bus-Teil: so frueh wie moeglich, vor dem WLAN. Das DMC haengt sich auf, wenn nach seinem Einschalten einige
+// Sekunden nichts auf dem Bus kommt (Einbau Loesung B, 08.11.2026).
+inline void start_bus(int rx_pin, int tx_pin, bool live_time, int fc_reply, int baud) {
   vebus_sniffer::g_baud = baud;
   g_live_time = live_time;
   g_fc_reply = fc_reply;
   g_tx_pin = tx_pin;
-  g_gx_ip = gx_ip;
-  g_unit = unit;
-  g_write_enable = write_enable;
   gpio_set_direction((gpio_num_t) tx_pin, GPIO_MODE_OUTPUT);
   gpio_set_level((gpio_num_t) tx_pin, 1);  // Ruhepegel bis zum Senden
   vebus_sniffer::g_on_frame = on_frame;
   vebus_sniffer::g_on_command = on_command;
-  vebus_sniffer::start(rx_pin);
+  vebus_sniffer::start_rx(rx_pin);
   xTaskCreatePinnedToCore(tx_task, "vebus_tx", 4096, nullptr, configMAX_PRIORITIES - 3, nullptr, 1);
+}
+
+// Netzwerk-Teil: GX und Mitschnitt-Server, nach dem Netzwerk-Stack
+inline void start_net(const char *gx_ip, uint8_t unit, bool write_enable) {
+  g_gx_ip = gx_ip;
+  g_unit = unit;
+  g_write_enable = write_enable;
+  vebus_sniffer::start_tcp();
   xTaskCreatePinnedToCore(gx_task, "vebus_gx", 4096, nullptr, 4, nullptr, 0);
   ESP_LOGW(TAG, "Schreiben auf den GX ist %s, eigene Zeitbasis %s, Antwort auf FC 0F: %d", write_enable ? "AN" : "aus",
-           live_time ? "an" : "aus", fc_reply);
+           g_live_time.load() ? "an" : "aus", g_fc_reply.load());
 }
 
 inline void log_stats() {

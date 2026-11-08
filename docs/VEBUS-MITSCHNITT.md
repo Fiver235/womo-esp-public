@@ -370,6 +370,18 @@ DMC Pin 1, 6, 7, 8 frei
 - **Verbrauch:** ESP etwa 0,5–1 W, DMC etwa 0,6 W, zusammen grob 2–3 Ah am Tag bei 12 V.
 - **Verworfen:** Lösung C (ESP schaltet das DMC über EN oder einen P-MOSFET ab, Schalter über Pin 6) wegen des Mehraufwands. Den Bus bei Aus stillzulegen macht das DMC nicht dunkel, es blinkt dann. Die Messwerte an Pin 6 stehen oben.
 
+### Problem beim Kaltstart (Aufbau 08.11.2026)
+
+Lösung B so aufgebaut: Bekommen ESP und DMC gleichzeitig Strom, hängt das DMC. Es zeigt keine LEDs, sendet keine Rahmen `40` und stört etwa alle 1–2 s den Bus. Der ESP zählt dann UART-Fehler, empfängt fast nur `00`-Bytes und abgeschnittene eigene Rahmen und wartet oft vergeblich auf einen ruhigen Bus. Nur Stecker des DMC ab und wieder an hilft, **bei laufendem Bus startet das DMC jedes Mal richtig**.
+
+| Versuch | Ergebnis |
+|---|---|
+| GPIO17 schon in `on_boot` Priorität 800 auf High (vorher bis nach dem WLAN offen, der 10 kΩ nach GND schaltet dann den Sender ein und legt den Bus auf „0“) | hängt |
+| DMC etwa 2 s nach dem ESP eingesteckt, Bus ruhig, ESP sendet erst nach WLAN und 5 s Zuhören | hängt |
+| Bus-Teil vor dem WLAN gestartet (`start_bus`), Zuhören 0,3 s statt 5 s: ESP sendet etwa 1,2 s nach dem Start | hängt |
+
+Folgerung: Das DMC braucht Busverkehr praktisch ab dem Einschalten. Die Firmware-Änderungen bleiben, sie schaden nicht. **Abhilfe:** Der ESP schaltet das 8,5-V-Modul erst ein, wenn er sendet, und kann ein hängendes DMC aus- und wieder einschalten. Die vorhandenen MP1584-Module haben keinen EN-Anschluss (nur IN+, IN−, OUT+, OUT−). Rudi bestellt ein Modul mit EN-Anschluss. Vor dem Anschluss die Spannung an EN gegen GND bei offenem EN messen, davon hängt die Beschaltung ab.
+
 ## Unterschied zum Betrieb
 
 Der Mitschnitt hängt am echten VE.Bus. Im geplanten Betrieb (`docs/DMC-RECHERCHE.md`, Abschnitt Vorgehen) kommt das DMC vom VE.Bus ab und bekommt ein **eigenes Kabel zum ESP**. Der ESP spielt dem DMC gegenüber den MultiPlus und schaltet den echten MultiPlus per WLAN über den GX. **Gesendet wird also nur zum DMC, nicht auf den VE.Bus.** Das alles ist noch ein Plan, ob das DMC damit läuft, klärt erst der Werkbanktest.

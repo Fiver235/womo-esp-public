@@ -33,10 +33,18 @@ esphome:
     - vebus_dmc_bridge.h
     - vebus_edges.h
   on_boot:
-    priority: -100
-    then:
+    - priority: 800         # so frueh wie moeglich
+      then:
+        # Einbau Loesung B: DMC und ESP bekommen gleichzeitig Strom. Kommt nach dem Einschalten des DMC einige
+        # Sekunden nichts auf dem Bus, haengt es sich auf und stoert danach selbst den Bus (08.11.2026). Deshalb
+        # startet der Bus-Teil hier, vor dem WLAN, und sendet nach 0,3 s Zuhoeren. start_bus haelt GPIO17 bis
+        # dahin auf High, sonst schaltet der 10k nach GND den Sender des Wandlers ein.
+        - lambda: |-
+            vebus_dmc_bridge::start_bus(${rx_pin}, ${tx_pin}, ${live_time}, ${fc_reply}, ${baud});
+    - priority: -100        # nach dem Netzwerk-Stack
+      then:
       - lambda: |-
-          vebus_dmc_bridge::start(${rx_pin}, ${tx_pin}, "${gx_ip}", ${vebus_unit_id}, ${write_enable}, ${live_time}, ${fc_reply}, ${baud});
+          vebus_dmc_bridge::start_net("${gx_ip}", ${vebus_unit_id}, ${write_enable});
           vebus_edges::start(${rx_pin}, ${edges_every});
           // Befehle vom Mitschnitt-Client gehen an beide Teile
           vebus_sniffer::g_on_command = [](const char *text) {
