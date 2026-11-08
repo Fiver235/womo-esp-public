@@ -296,6 +296,12 @@ Vorsicht beim Testbefehl `Y<n>`/`X<n>`: Das DMC meldet den begrenzten Wert, und 
 
 **Einschalten nach längerem Aus, 08.11.2026.** Zweimal nahm der GX den Befehl Ein (Register 33 = 3) an und setzte ihn nach rund 10 s selbst wieder auf 4, der MultiPlus blieb aus: 13:24 nach etwa 40 s Aus und 13:33:41 nach etwa 55 s Aus (`gxmode_watch`, Register 33 und 31 jede Sekunde). Einschalten per VRM klappte danach (13:36:24). Ein dritter Versuch nach etwa 50 s Aus klappte auf Anhieb (13:39:04, Bulk nach 24 s). Die Ursache ist nicht geklärt. Die Firmware prüft deshalb nach jedem Schaltbefehl 30 s lang den Mode am GX. Springt er auf den Wert vor dem Befehl zurück und steht der Schalter am DMC unverändert, schreibt sie erneut, höchstens fünfmal. Ein anderer neuer Wert, zum Beispiel aus VRM, bleibt stehen. Die Wiederholung hat im Test noch nicht ausgelöst.
 
+**Stromgrenze bei Aus, 08.11.2026.** Der GX bestätigt das Schreiben von Register 22 bei Aus immer, behält den Wert aber nicht verlässlich: 6,0 A erst nach rund einer Minute, 16,0 A gar nicht (nach dem Einschalten stand er weiter auf 9,0 A), 12,0 A sofort (14:03:19). Die Firmware merkt sich deshalb eine Grenze, die sie bei Aus geschrieben hat, und schreibt sie erneut, sobald der MultiPlus wieder läuft und der GX einen anderen Wert hat. Eine neuere Grenze vom GX oder aus VRM verwirft das. Im Test mit 12,0 A war das Nachschreiben nicht nötig.
+
+**Fehler beim Start, behoben 08.11.2026:** Nach dem Flashen hört der ESP 5 s nur zu, das DMC sendet trotzdem. Die Nachführung der Anzeige lief in dieser Zeit ins Leere, danach hielt die Firmware den Knopfwert 16,0 A für eine Änderung und schrieb ihn an den GX (vorher 9,0 A). Jetzt beginnt die Nachführung erst, wenn der ESP sendet. Übernimmt das DMC den Wert nicht, nimmt die Firmware den DMC-Wert als Ausgangswert und schreibt nichts. Geprüft nur mit gleichen Werten an DMC und GX (Neustart ohne Schreiben).
+
+**GX nicht erreichbar, 08.11.2026 etwa 14:04:40 bis 14:09:55:** Weder der ESP noch der PC erreichten Modbus am GX, 192.168.100.209 antwortete auf Ping. Ursache unbekannt. Nach 10 s ohne Daten vom GX schaltet die Firmware die LEDs des DMC aus.
+
 Am DMC liegt Aus in der Mitte des Schalters. Von Ein nach Ladegerät geht es über Aus, bleibt der Schalter dort länger als 0,3 s, geht der MultiPlus kurz aus (gesehen 13:28:02).
 
 **Noch offen vor dem Einbau:** die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.

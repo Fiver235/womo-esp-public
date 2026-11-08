@@ -576,6 +576,10 @@ inline void gx_task(void *) {
   uint16_t verify_value = 0, verify_prev = 0;
   int64_t verify_until = 0;
   int verify_tries = 0;
+  // Stromgrenze bei Aus: Der GX bestaetigt das Schreiben, behaelt den Wert aber nicht (08.11.2026, Knopf bei Aus auf
+  // 16,0 A, nach dem Einschalten stand der GX weiter auf 9,0 A). Die Firmware schreibt ihn nach dem Einschalten erneut.
+  bool limit_dirty = false;
+  uint16_t limit_dirty_value = 0;
   int last_gx_limit = -1;  // zuletzt gelesene Grenze vom GX, -1 = noch keine
   bool sync_display = false;  // nach dem Start des DMC einmal auf den GX-Wert bringen
 
@@ -628,9 +632,16 @@ inline void gx_task(void *) {
       }
       if (force_until != 0 && now >= force_until) {
         force_until = 0;
+        if (seen_limit != (uint16_t) g_force_limit.load()) {
+          // Das DMC hat den Wert nicht uebernommen: seinen Wert als Ausgangswert nehmen, nicht schreiben
+          ESP_LOGW(TAG, "Anzeige nicht uebernommen, DMC bleibt bei %u", seen_limit);
+          base_limit = seen_limit;
+        }
         g_force_limit = -1;
       }
-      if (sync_display && last_gx_limit >= 0 && !limit.active) {
+      // Erst wenn der ESP sendet: Nach einem Neustart hoert er zuerst 5 s nur zu, das DMC sendet trotzdem.
+      // Am 08.11.2026 lief die Nachfuehrung dadurch ins Leere, und der Knopfwert 16,0 A ging an den GX.
+      if (sync_display && last_gx_limit >= 0 && !limit.active && g_sending.load()) {
         sync_display = false;
         force_display((uint16_t) last_gx_limit, now);
       }
@@ -640,6 +651,10 @@ inline void gx_task(void *) {
         if (v < LIMIT_MIN) v = LIMIT_MIN;
         if (v > LIMIT_MAX) v = LIMIT_MAX;
         plan_write(limit, REG_LIMIT, v);
+        if (g_gx_mode.load() == 4) {
+          limit_dirty = true;
+          limit_dirty_value = v;
+        }
       }
     }
 
@@ -697,8 +712,17 @@ inline void gx_task(void *) {
            transact(s, 3, REG_ALARM_OVERLOAD, &ao);
       if (ok) {
         // Neue Grenze vom GX, nicht von uns geschrieben: Anzeige des DMC nachfuehren
-        if (baseline && last_gx_limit >= 0 && l != (uint16_t) last_gx_limit && !limit.active && l != seen_limit) {
+        if (baseline && last_gx_limit >= 0 && l != (uint16_t) last_gx_limit && !limit.active && l != seen_limit &&
+            !(limit_dirty && m == 4)) {
           force_display(l, esp_timer_get_time());
+          limit_dirty = false;  // neuere Grenze vom GX oder aus VRM gewinnt
+        }
+        if (limit_dirty && m != 4 && st != 0 && !limit.active) {
+          limit_dirty = false;
+          if (l != limit_dirty_value) {
+            ESP_LOGW(TAG, "MultiPlus laeuft wieder, Grenze %u vom DMC erneut (GX hatte %u)", limit_dirty_value, l);
+            plan_write(limit, REG_LIMIT, limit_dirty_value);
+          }
         }
         last_gx_limit = l;
         g_gx_limit = l;
