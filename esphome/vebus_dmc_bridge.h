@@ -201,13 +201,40 @@ inline void wait_bus_idle() {
   if (busy) g_busy_waits++;
 }
 
+// Zeitlicher Aufbau der Rahmen des MultiPlus, Flankenmessung am VE.Bus 08.11.2026 (logs/vebus-20261108-edges-bus.log):
+// Jeder Rahmen: zwei Adressbytes, dann 8,5 us Pause, dann der Rest dicht an dicht.
+// Der Sync zusaetzlich: nach der Rahmennummer 98,6 us Pause, dann 55, dann 98,9 us Pause, dann Zeit, Pruefsumme, FF.
+// Ohne diese Pausen hat das DMC den Sync des ESP nie mitgezaehlt. Zeiten ab Beginn des Rahmens in us:
+static constexpr int64_t T_ADDR_REST_US = 88;   // 83 83 (79 us) + 8,5 us Pause
+static constexpr int64_t T_SYNC_55_US = 266;    // Beginn des Bytes 55
+static constexpr int64_t T_SYNC_TIME_US = 405;  // Beginn der Zeitbytes
+
+inline void write_at(const uint8_t *p, size_t n, int64_t at) {
+  while (esp_timer_get_time() < at) {
+  }
+  uart_ll_write_txfifo(UART_LL_GET_HW(vebus_sniffer::PORT), p, (uint32_t) n);
+}
+
+// Sendet einen fertigen Rahmen (mit Pruefsumme und FF) ab t0 mit den Pausen des MultiPlus.
+inline void send_shaped(const uint8_t *out, size_t n, int64_t t0) {
+  const bool sync = n >= 8 && out[2] == 0xFD && out[4] == 0x55;
+  write_at(out, 2, t0);
+  if (!sync) {
+    write_at(out + 2, n - 2, t0 + T_ADDR_REST_US);
+  } else {
+    write_at(out + 2, 2, t0 + T_ADDR_REST_US);  // FD und Nummer
+    write_at(out + 4, 1, t0 + T_SYNC_55_US);
+    write_at(out + 5, n - 5, t0 + T_SYNC_TIME_US);
+  }
+  vebus_sniffer::push_record((uint32_t) t0, 4, out, n);  // eigener Rahmen in den Mitschnitt (T)
+}
+
 inline void send_frame(const uint8_t *head, size_t len) {
   uint8_t out[64];
   wait_bus_idle();
   const uint8_t nr = g_next_nr.load();
   const size_t n = build(head, len, nr, out);
-  uart_write_bytes(vebus_sniffer::PORT, out, n);
-  vebus_sniffer::push_record((uint32_t) esp_timer_get_time(), 4, out, n);  // eigener Rahmen in den Mitschnitt (T)
+  send_shaped(out, n, esp_timer_get_time() + 20);
   g_next_nr = (nr + 1) & 0x7F;
   g_sent++;
 }
@@ -240,12 +267,8 @@ inline void send_sync_now(int64_t target_us) {
   uint8_t out[24];
   const uint8_t nr = g_next_nr.load();
   const size_t m = build(h, n, nr, out);
-  portENTER_CRITICAL(&mux);
-  while (esp_timer_get_time() < start) {
-  }
-  uart_ll_write_txfifo(UART_LL_GET_HW(vebus_sniffer::PORT), out, m);
-  portEXIT_CRITICAL(&mux);
-  vebus_sniffer::push_record((uint32_t) start, 4, out, m);
+  (void) mux;
+  send_shaped(out, m, start);
   g_next_nr = (nr + 1) & 0x7F;
   g_sent++;
 }

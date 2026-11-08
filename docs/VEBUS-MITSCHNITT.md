@@ -250,6 +250,19 @@ Ablauf:
 - **Fehler der Messfirmware, behoben:** Der UART empfing neben der RMT-Einheit am selben Pin nichts mehr. GPIO16 ist der feste Pin von U2RXD, die RMT-Einheit schaltete ihn auf GPIO um. Der UART bekommt sein Signal jetzt über die GPIO-Matrix. Zweiter Lauf: 50 Zeilen `F`, 47 Zeilen `E`, alle fehlerfrei.
 - **Versuch mit 250 000 und 251 000 Baud in der DMC-Firmware** (`logs/vebus-20261106-baud.log`, Befehl `B<n>`): ohne Wirkung, weiter rund 100 `FC 0F` pro Sekunde. Bei 250 000 Baud sendet das DMC seinen Rahmen `40` häufiger, etwa 10-mal pro Sekunde. Die Vorgabe bleibt bei 256 000.
 
+**Messung am VE.Bus, 08.11.2026** (`logs/vebus-20261108-edges-bus.log`, lokal, 120 s, jeder 2. Rahmen mit Flanken, 3812 Datensätze, alle MultiPlus-Rahmen fehlerfrei dekodiert). **Der Unterschied ist gefunden:**
+
+| | MultiPlus | ESP bisher |
+|---|---|---|
+| Bitdauer | 3955 ns Sync, 3970 ns `E4` (etwa 252 900 Baud) | 3906 ns (256 000 Baud) |
+| nach den zwei Adressbytes | 8,5 µs Pause, dann der Rest dicht an dicht | keine Pause |
+| Sync: nach der Rahmennummer | **98,6 µs Pause**, dann `55` | keine Pause |
+| Sync: nach `55` | **98,9 µs Pause**, dann Zeit, Prüfsumme, FF dicht an dicht | keine Pause |
+
+Die Pausen im Sync streuen nur um ±0,4 µs, sie sind also gewollt. Vermutlich ist der Beginn des Bytes `55` der Zeitpunkt, auf den sich die Uhrzeit bezieht, und in der Pause danach liest der MultiPlus seine Uhr. Das DMC (250 900 Baud) und der GX (249 300 Baud) machen die 8,5-µs-Pause nach der Adresse ebenfalls. Zeiten ab Rahmenbeginn: `FD` bei 88 µs, `55` bei 266 µs, Zeitbytes bei 405 µs.
+
+Die DMC-Firmware sendet jetzt alle Rahmen mit der Pause nach der Adresse und den Sync mit den beiden Pausen (`send_shaped`), Vorgabe 253 000 Baud. Gebaut, noch nicht am DMC geprüft: Der ESP hing beim Bauen noch am VE.Bus.
+
 Gesucht wird alles, worin sich der Sync von den Datenrahmen oder vom Signal des ESP unterscheidet: Pausen zwischen den Bytes, ein zweites Stoppbit, zusätzliche Pulse, eine andere Bitdauer. Der ESP sendet 8N1 ohne Pausen mit 3906 ns je Bit. Die Auswertung ist bisher nur mit künstlichen Daten geprüft (`selftest`).
 
 **Noch offen vor dem Einbau:** die häufigen `FC 0F` (Ursache eingegrenzt, siehe oben), die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
