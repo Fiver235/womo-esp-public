@@ -304,6 +304,8 @@ Vorsicht beim Testbefehl `Y<n>`/`X<n>`: Das DMC meldet den begrenzten Wert, und 
 
 Am DMC liegt Aus in der Mitte des Schalters. Von Ein nach Ladegerät geht es über Aus, bleibt der Schalter dort länger als 0,3 s, geht der MultiPlus kurz aus (gesehen 13:28:02).
 
+**Versorgung für den Einbau, Entscheidung Rudi 08.11.2026: alles aus dem Bordnetz.** V+ am VE.Bus scheidet aus, weil es bei Aus auf 2,2 V fällt und der ESP dann das Einschalten am DMC nicht mehr mitbekäme. Geplant: 12 V → Step-down 5 V → ESP; 12 V → Step-down 8,5 V mit EN-Eingang → DMC Pin 2, EN vom ESP geschaltet; gemeinsame Masse Bordnetz, ESP, DMC Pin 3. Das DMC hängt nicht mehr am MultiPlus. Bei Aus schaltet der ESP das DMC ab und erkennt das Einschalten über Pin 6 des DMC (Standby), vorausgesetzt der Schalter legt Pin 6 auch stromlos auf Masse. Das ist noch zu messen (Durchgang Pin 6 gegen Pin 3 in allen drei Stellungen).
+
 **Noch offen vor dem Einbau:** die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
