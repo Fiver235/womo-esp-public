@@ -20,7 +20,8 @@ substitutions:
   write_enable: "true"      # freigegeben von Rudi am 05.11.2026 fuer den Schalttest
   live_time: "false"        # Versuch 06.11.2026: Zeitstempel in Sync und E4 aus der eigenen Uhr, ohne Wirkung
   baud: "253000"           # Flankenmessung 08.11.2026: MultiPlus etwa 252900, DMC 250900, GX 249300 Baud; Befehl B<n>
-  fc_reply: "0"             # Antwort auf FC 0F: 0 keine, 1 Rahmen 38, 2 sofort Sync und 38 (beides loest nur weitere FC 0F aus)
+  edges_every: "0"          # Flanken empfangener Rahmen aufzeichnen (vebus_edges.h): 0 aus, n = jeder n-te; Befehl E<n>
+  fc_reply: "0"            # Antwort auf FC 0F: 0 keine, 1 Rahmen 38, 2 sofort Sync und 38 (beides loest nur weitere FC 0F aus)
 
 esphome:
   name: ${name}
@@ -30,16 +31,27 @@ esphome:
     - vebus_dmc_replay.h
     - vebus_dmc_bench.h
     - vebus_dmc_bridge.h
+    - vebus_edges.h
   on_boot:
     priority: -100
     then:
-      - lambda: vebus_dmc_bridge::start(${rx_pin}, ${tx_pin}, "${gx_ip}", ${vebus_unit_id}, ${write_enable}, ${live_time}, ${fc_reply}, ${baud});
+      - lambda: |-
+          vebus_dmc_bridge::start(${rx_pin}, ${tx_pin}, "${gx_ip}", ${vebus_unit_id}, ${write_enable}, ${live_time}, ${fc_reply}, ${baud});
+          vebus_edges::start(${rx_pin}, ${edges_every});
+          // Befehle vom Mitschnitt-Client gehen an beide Teile
+          vebus_sniffer::g_on_command = [](const char *text) {
+            vebus_dmc_bridge::on_command(text);
+            vebus_edges::on_command(text);
+          };
 
 esp32:
   board: esp32dev
   cpu_frequency: 160MHz
   framework:
     type: esp-idf
+    advanced:
+      include_builtin_idf_components:
+        - esp_driver_rmt    # fuer vebus_edges.h, ESPHome laesst den RMT-Treiber sonst weg
 
 logger:
   level: INFO
@@ -86,4 +98,6 @@ wireguard:
 interval:
   - interval: 10s
     then:
-      - lambda: vebus_dmc_bridge::log_stats();
+      - lambda: |-
+          vebus_dmc_bridge::log_stats();
+          vebus_edges::log_stats();

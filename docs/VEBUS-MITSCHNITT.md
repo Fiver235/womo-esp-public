@@ -261,11 +261,16 @@ Ablauf:
 
 Die Pausen im Sync streuen nur um ±0,4 µs, sie sind also gewollt. Vermutlich ist der Beginn des Bytes `55` der Zeitpunkt, auf den sich die Uhrzeit bezieht, und in der Pause danach liest der MultiPlus seine Uhr. Das DMC (250 900 Baud) und der GX (249 300 Baud) machen die 8,5-µs-Pause nach der Adresse ebenfalls. Zeiten ab Rahmenbeginn: `FD` bei 88 µs, `55` bei 266 µs, Zeitbytes bei 405 µs.
 
-Die DMC-Firmware sendet jetzt alle Rahmen mit der Pause nach der Adresse und den Sync mit den beiden Pausen (`send_shaped`), Vorgabe 253 000 Baud. Gebaut, noch nicht am DMC geprüft: Der ESP hing beim Bauen noch am VE.Bus.
+Die DMC-Firmware sendet jetzt alle Rahmen mit der Pause nach der Adresse und den Sync mit den beiden Pausen (`send_shaped`), Vorgabe 253 000 Baud.
+
+**Ergebnis auf der Werkbank, 08.11.2026: Die Flut ist weg.** `logs/vebus-20261108-after-restart.log`, 60 s: kein `FC 0F`, der Rahmen `40` kommt alle 500 ms, 120 von 120 Rahmen tragen die Nummer des Sync davor plus 1, keine fehlerhaften Rahmen, LED Inverter On passend zum GX. Das DMC verhält sich damit wie am echten Bus.
+
+- **Das DMC muss nach dem Wechsel einmal stromlos gemacht werden.** Direkt nach dem Flashen blieb es in einem Zwischenzustand: 9 mA, nur die Anzeige, keine LEDs, kein `40`, alle 2 bis 3 s ein Burst aus Bytes ohne erkennbares Rahmenformat (`logs/vebus-20261108-shape*.log`). Baudrate des Empfangs und Kollisionen schieden aus. Netzteil aus und wieder an hat es behoben. Für den Einbau spricht das noch einmal für eine Versorgung des DMC, die der ESP schalten kann.
+- Die Baudrate allein war es nicht (Versuch vom 06.11.2026), die Pausen im Sync schon. Welche der beiden Pausen das DMC braucht, ist nicht einzeln geprüft.
 
 Gesucht wird alles, worin sich der Sync von den Datenrahmen oder vom Signal des ESP unterscheidet: Pausen zwischen den Bytes, ein zweites Stoppbit, zusätzliche Pulse, eine andere Bitdauer. Der ESP sendet 8N1 ohne Pausen mit 3906 ns je Bit. Die Auswertung ist bisher nur mit künstlichen Daten geprüft (`selftest`).
 
-**Noch offen vor dem Einbau:** die häufigen `FC 0F` (Ursache eingegrenzt, siehe oben), die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
+**Noch offen vor dem Einbau:** die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
 1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.
@@ -379,3 +384,4 @@ Mitschnitt `logs/vebus-20261105-171337.log` (lokal, nicht im Repo), etwa 8 Minut
 | Versorgung | Mitschnitt von der Powerbank. V+ gemessen 9,0 V ohne DMC, mit DMC 8,35–8,85 V, bei Aus 2,2 V. V+ scheidet als Versorgung des ESP aus |
 | WireGuard 192.168.100.210 | Peer in der Fritzbox angelegt, Handshake im Log erfolgreich (05.11.2026, WLAN WDS6G) |
 | Mitschnitt an der Anlage | erster Lauf mit Drehknopf und Schalter erfolgreich, noch mit R14 auf dem Modul; siehe „Ergebnisse" |
+| Übersetzung DMC ↔ GX (`esphome/vebus-dmc-bridge.yaml`) | 08.11.2026: läuft ohne `FC 0F`-Flut, seit der Sync die Pausen des MultiPlus hat; Schreiben freigegeben; Flankenmessung abschaltbar eingebaut (`edges_every`) |
