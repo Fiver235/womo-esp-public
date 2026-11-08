@@ -568,6 +568,14 @@ inline void gx_task(void *) {
   uint16_t base_limit = 0, seen_limit = 0;
   int64_t pos_since = 0, limit_since = 0, next_poll = 0;
   int64_t force_until = 0;
+  // Nachpruefen der Schaltbefehle: Nach laengerem Aus setzte der GX Mode 3 nach rund 10 s selbst wieder auf 4
+  // (08.11.2026, zweimal nachgestellt; Einschalten per VRM klappte). Springt der GX innerhalb von VERIFY_US auf den
+  // Wert vor dem Befehl zurueck und steht der Schalter am DMC unveraendert, schreibt die Firmware erneut.
+  static constexpr int64_t VERIFY_US = 30 * 1000 * 1000;
+  static constexpr int VERIFY_MAX = 5;
+  uint16_t verify_value = 0, verify_prev = 0;
+  int64_t verify_until = 0;
+  int verify_tries = 0;
   int last_gx_limit = -1;  // zuletzt gelesene Grenze vom GX, -1 = noch keine
   bool sync_display = false;  // nach dem Start des DMC einmal auf den GX-Wert bringen
 
@@ -615,6 +623,8 @@ inline void gx_task(void *) {
         base_pos = seen_pos;
         static const uint16_t MODE_FOR_POS[4] = {1, 2, 3, 4};  // Ladegeraet, Wechselrichter, Ein, Aus
         plan_write(mode, REG_MODE, MODE_FOR_POS[base_pos & 3]);
+        verify_until = 0;  // neuer Befehl vom DMC, alte Pruefung hinfaellig
+        verify_tries = 0;
       }
       if (force_until != 0 && now >= force_until) {
         force_until = 0;
@@ -662,6 +672,11 @@ inline void gx_task(void *) {
         p->active = false;
         g_writes_ok++;
         ESP_LOGW(TAG, "Register %u = %u bestaetigt", p->reg, p->value);
+        if (p == &mode) {
+          if (verify_until == 0) verify_prev = g_gx_mode.load();  // Wert vor dem ersten Befehl
+          verify_value = p->value;
+          verify_until = now + VERIFY_US;
+        }
         next_poll = 0;
       } else {
         ok = false;
@@ -687,6 +702,27 @@ inline void gx_task(void *) {
         }
         last_gx_limit = l;
         g_gx_limit = l;
+        if (verify_until != 0) {
+          static const uint16_t MODE_FOR_POS2[4] = {1, 2, 3, 4};
+          const int64_t t = esp_timer_get_time();
+          if (t > verify_until) {
+            verify_until = 0;
+          } else if (m == verify_prev && m != verify_value && MODE_FOR_POS2[base_pos & 3] == verify_value &&
+                     !mode.active) {
+            if (++verify_tries > VERIFY_MAX) {
+              ESP_LOGE(TAG, "GX setzt Mode immer wieder auf %u zurueck, gebe auf", m);
+              verify_until = 0;
+              g_writes_failed++;
+            } else {
+              ESP_LOGW(TAG, "GX hat Mode auf %u zurueckgesetzt, schreibe %u erneut (%d)", m, verify_value, verify_tries);
+              mode.active = true;
+              mode.reg = REG_MODE;
+              mode.value = verify_value;
+              mode.tries = 0;
+              mode.next_us = 0;
+            }
+          }
+        }
         g_gx_state = st;
         g_gx_mode = m;
         g_gx_alarm_temp = (uint8_t) at;

@@ -294,6 +294,10 @@ Die Firmware nutzt das: Kommt eine neue Grenze vom GX, die nicht vom DMC stammt,
 
 Vorsicht beim Testbefehl `Y<n>`/`X<n>`: Das DMC meldet den begrenzten Wert, und der ESP schreibt ihn an den GX (so am 08.11.2026 einmal 4,0 A geschrieben, mit dem Knopf zurückgestellt).
 
+**Einschalten nach längerem Aus, 08.11.2026.** Zweimal nahm der GX den Befehl Ein (Register 33 = 3) an und setzte ihn nach rund 10 s selbst wieder auf 4, der MultiPlus blieb aus: 13:24 nach etwa 40 s Aus und 13:33:41 nach etwa 55 s Aus (`gxmode_watch`, Register 33 und 31 jede Sekunde). Einschalten per VRM klappte danach (13:36:24). Ein dritter Versuch nach etwa 50 s Aus klappte auf Anhieb (13:39:04, Bulk nach 24 s). Die Ursache ist nicht geklärt. Die Firmware prüft deshalb nach jedem Schaltbefehl 30 s lang den Mode am GX. Springt er auf den Wert vor dem Befehl zurück und steht der Schalter am DMC unverändert, schreibt sie erneut, höchstens fünfmal. Ein anderer neuer Wert, zum Beispiel aus VRM, bleibt stehen. Die Wiederholung hat im Test noch nicht ausgelöst.
+
+Am DMC liegt Aus in der Mitte des Schalters. Von Ein nach Ladegerät geht es über Aus, bleibt der Schalter dort länger als 0,3 s, geht der MultiPlus kurz aus (gesehen 13:28:02).
+
 **Noch offen vor dem Einbau:** die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
