@@ -328,6 +328,80 @@ Der Schalter verbindet Pin 6 bei Ein und Ladegerät auch ohne Versorgung über e
 2. Die LEDs sollten zum MultiPlus passen. Schalter und Knopf erzeugen nur Log-Einträge.
 3. Erst danach `write_enable: "true"` und die Reihe aus `docs/MULTIPLUS-SCHALTER.md`: DMC schaltet, CCGX/VRM/HA schalten, wieder DMC, jeweils LEDs und Zustand prüfen.
 
+## Einbau: Schaltplan Lösung C (Entwurf 08.11.2026)
+
+Versorgung aus dem Bordnetz, DMC bei Aus stromlos, Schalterstellung über Pin 6. Ungetestet. Vor dem Aufbau sind drei Punkte zu messen (siehe unten).
+
+```text
+                           Sicherung 1 A    SS34
+12 V Bordnetz (+) ─────────────[ F ]────────►|──────┬──────────────────────┐
+                                                    │                      │
+                                              ┌─────┴─────┐          ┌─────┴─────┐
+                                              │  Buck 1   │          │  Buck 2   │
+                                              │  5,0 V    │          │  8,5 V    │
+                                              │ IN+  OUT+ ├──┐       │ IN+  OUT+ ├──────────► DMC Pin 2
+                                              │ IN-  OUT- │  │       │ EN   OUT- │
+                                              └──┬────┬───┘  │       └──┬──┬──┬──┘
+                                                 │    │      │          │  │  │
+GND Bordnetz (−) ────────────────────────────────┴────┴──────┼──────────┴──┼──┴─────────► DMC Pin 3
+                                                             │             │
+                                5 V ◄────────────────────────┘             │ EN
+                                 │                                         │
+                ┌────────────────┼──────────────┐                          │ Drain
+                │ ESP32 DevKit   │              │                    ┌─────┴─────┐
+                │            5V/VIN             │                    │  2N7000   │
+                │                               │      100 Ω         │           │
+                │          GPIO25 ──────────────┼────────/\/\/───┬───┤ Gate      │
+                │                               │                │   │    Source ├── GND
+                │                               │             100 kΩ └───────────┘
+                │                               │                │
+                │                               │               GND
+                │                               │
+                │          3V3 ─────────────────┼── 10 kΩ ──┬──────────────────────► DMC Pin 6
+                │                               │           │
+                │          GPIO34 ──────────────┼── 10 kΩ ──┘
+                │                     │         │
+                │                  100 nF       │
+                │                     │         │
+                │                    GND        │
+                │                               │
+                │          GPIO16 ◄─────────────┼── 1 kΩ ──┬── RXD  RS485-Wandler
+                │                               │        2 kΩ
+                │                               │          └── GND
+                │          GPIO17 ──────────────┼── 1N4148 ─────► TXD  (Strich zum ESP)
+                │             │                 │
+                │           10 kΩ               │          VCC ◄── 5 V
+                │             │                 │          GND ── GND
+                │            GND                │          A+  ─────────────────► DMC Pin 4
+                │          GND ─────────────────┼── GND    B−  ─────────────────► DMC Pin 5
+                └───────────────────────────────┘
+
+DMC Pin 1, 7, 8 frei (7 liegt im DMC auf Masse)
+```
+
+| Teil | Wert | Zweck |
+|---|---|---|
+| F | 1 A, flink, mit Halter | Abgriff vom Bordnetz |
+| SS34 | Schottky 3 A | Verpolschutz |
+| Buck 1 | z. B. MP1584 oder Mini-360, auf 5,0 V gestellt | ESP und RS485-Wandler |
+| Buck 2 | MP1584-Modul **mit EN-Pin**, auf 8,5 V gestellt | DMC |
+| 2N7000 | N-MOSFET (oder BS170) | zieht EN von Buck 2 auf Masse |
+| 100 Ω, 100 kΩ | | Gate-Vorwiderstand, Gate-Pulldown |
+| 2 × 10 kΩ | | Pull-up an Pin 6, Schutz vor GPIO34 |
+| 100 nF | | Glättung am Analogeingang |
+| RS485-Wandler, 1N4148, 1 kΩ, 2 kΩ, 10 kΩ | wie im Werkbanktest | Bus zum DMC |
+
+**Logik:**
+- **GPIO25 Low (auch beim Booten und bei abgestürztem ESP):** Transistor sperrt, EN ist High, das DMC hat Strom. Fällt der ESP aus, bleibt das DMC also versorgt.
+- **GPIO25 High:** Transistor zieht EN auf Masse, Buck 2 schaltet ab, das DMC ist stromlos.
+- **GPIO34:** etwa 3,3 V bei Schalter Aus, etwa 1 V bei Ein und Ladegerät (Diodentest 1,05 V). Schwelle etwa 2 V. Gilt bei stromlosem DMC; im Betrieb meldet das DMC den Schalter ohnehin im Rahmen `40`.
+- Die Firmware versorgt das DMC, wenn der Schalter nicht auf Aus steht **oder** der MultiPlus laut GX läuft. Sonst schaltet sie es ab. Hängt das DMC, schaltet sie es kurz aus und wieder ein.
+
+**Vor dem Aufbau zu klären:**
+1. **EN-Eingang von Buck 2:** Viele MP1584-Module ziehen EN über 100 kΩ auf IN+. Fehlt dieser Pull-up, 100 kΩ von EN nach IN+ ergänzen. EN nie direkt an einen GPIO, sonst liegen 12 V am ESP.
+2. **Pin 6 mit dem Pull-up messen**, DMC stromlos: Spannung an Pin 6 bei Aus, Ein und Ladegerät. Erwartet 3,3 V und etwa 1 V.
+3. **Pin 6 mit versorgtem DMC messen**, 8,5 V: Liegt bei einer Stellung mehr als 3,3 V an, braucht GPIO34 zusätzlichen Schutz.
+
 ## Unterschied zum Betrieb
 
 Der Mitschnitt hängt am echten VE.Bus. Im geplanten Betrieb (`docs/DMC-RECHERCHE.md`, Abschnitt Vorgehen) kommt das DMC vom VE.Bus ab und bekommt ein **eigenes Kabel zum ESP**. Der ESP spielt dem DMC gegenüber den MultiPlus und schaltet den echten MultiPlus per WLAN über den GX. **Gesendet wird also nur zum DMC, nicht auf den VE.Bus.** Das alles ist noch ein Plan, ob das DMC damit läuft, klärt erst der Werkbanktest.
