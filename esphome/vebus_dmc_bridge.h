@@ -7,12 +7,13 @@
 // schreibt nichts: So gilt "letzter Befehl gewinnt", und ein Neustart schaltet den MultiPlus nicht.
 //
 // Geschrieben wird nur mit write_enable = true, sonst steht der geplante Befehl nur im Log.
-// Die LEDs Ueberlast, Batterie und Temperatur werden noch nicht abgeleitet. Der Rahmen 0x38 auf FC 0F ist ein
-// Versuch aus dem Mitschnitt, seine Bedeutung ist nicht dokumentiert.
+// Die LEDs Ueberlast, Batterie und Temperatur kommen aus den Alarmregistern 34 bis 36 des GX: Warnung blinkt,
+// Alarm leuchtet.
 // Nur auf einer eigenen Leitung zum DMC verwenden, siehe docs/VEBUS-MITSCHNITT.md.
 
 #pragma once
 
+#include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <fcntl.h>
@@ -31,6 +32,8 @@ using vebus_dmc_bench::build;
 using vebus_dmc_bench::wait_until;
 
 static constexpr uint16_t REG_LIMIT = 22, REG_STATE = 31, REG_MODE = 33;
+// Alarme des VE.Bus-Geraets am GX: 0 ok, 1 Warnung, 2 Alarm (Victron CCGX-Modbus-TCP-Liste, com.victronenergy.vebus)
+static constexpr uint16_t REG_ALARM_TEMP = 34, REG_ALARM_LOWBAT = 35, REG_ALARM_OVERLOAD = 36;
 static constexpr int64_t GX_STALE_US = 10 * 1000000;
 static constexpr int64_t DMC_LOST_US = 3 * 1000000;
 static constexpr int64_t SWITCH_STABLE_US = 300 * 1000;
@@ -49,7 +52,7 @@ inline int g_tx_pin = 17;
 //              Aufzeichnung. g_fc_reply: 0 keine Antwort auf FC 0F, 1 Rahmen 38, 2 sofort Sync und danach 38.
 // Zur Laufzeit umschaltbar ueber Textbefehle vom Mitschnitt-Client (tools/vebus_capture.py --script):
 //   L0 L1 = g_live_time, R0 R1 R2 = g_fc_reply, Dxx = Rahmentyp xx (hex) nicht senden, Uxx = wieder senden, A = alle,
-//   B<n> = Baudrate, O<n> = Abstand der Sync-Zeit.
+//   B<n> = Baudrate, O<n> = Abstand der Sync-Zeit, Wxxyy = LED-Test (LED-Byte xx, Blink-Byte yy), W = Test aus.
 inline std::atomic<int> g_live_time{0};
 inline std::atomic<int> g_fc_reply{1};
 inline std::atomic<bool> g_drop[256];
@@ -58,6 +61,9 @@ inline TaskHandle_t g_tx_handle = nullptr;
 
 // Vom GX
 inline std::atomic<uint16_t> g_gx_limit{0}, g_gx_state{0}, g_gx_mode{0};
+inline std::atomic<uint8_t> g_gx_alarm_temp{0}, g_gx_alarm_lowbat{0}, g_gx_alarm_overload{0};
+// Test der Warn-LEDs ohne echten Alarm: Befehl Wxxyy setzt LED-Byte xx und Blink-Byte yy fest, W allein hebt es auf
+inline std::atomic<int> g_test_led{-1}, g_test_blink{0}, g_test_b4{-1}, g_test_b5{-1};  // Wxxyy[zz[ww]]: auch Byte 4 und 5
 inline std::atomic<int64_t> g_gx_ok_us{0};
 // Vom DMC, gesetzt in der Empfangstask
 inline std::atomic<uint8_t> g_dmc_pos{0};
@@ -147,7 +153,26 @@ inline size_t put(uint8_t *out, size_t n, uint8_t b) {
 inline size_t head_41(uint8_t *h) {
   const bool fresh = esp_timer_get_time() - g_gx_ok_us.load() < GX_STALE_US && g_gx_ok_us.load() != 0;
   const uint16_t mode = g_gx_mode.load();
-  const uint8_t led = fresh ? leds_from_state(g_gx_state.load()) : 0;
+  uint8_t led = fresh ? leds_from_state(g_gx_state.load()) : 0;
+  uint8_t blink = 0;
+  // Warn-LEDs stehen im Byte nach dem Blink-Byte, am DMC ausprobiert am 08.11.2026 (nicht wie im MK2-Dokument):
+  //   Bit 0 Temperatur blinkt, Bit 1 Batterie blinkt, Bit 2 Ueberlast blinkt, Bit 3 Ueberlast und Batterie blinken
+  //   (Ripple), Bit 0+4 Temperatur leuchtet, Bit 1+5 Batterie leuchtet, Bit 6 Ueberlast leuchtet.
+  //   Bit 4, 5 und 7 allein zeigen nichts. GX-Alarm 1 = Warnung blinkt, 2 = Alarm leuchtet.
+  uint8_t warn = 0;
+  if (fresh) {
+    const uint8_t t = g_gx_alarm_temp.load(), b = g_gx_alarm_lowbat.load(), o = g_gx_alarm_overload.load();
+    if (t == 1) warn |= 0x01;
+    if (t >= 2) warn |= 0x11;
+    if (b == 1) warn |= 0x02;
+    if (b >= 2) warn |= 0x22;
+    if (o == 1) warn |= 0x04;
+    if (o >= 2) warn |= 0x40;
+  }
+  if (g_test_led.load() >= 0) {
+    led = (uint8_t) g_test_led.load();
+    blink = (uint8_t) g_test_blink.load();
+  }
   const uint16_t limit = fresh ? g_gx_limit.load() : 0;
   uint8_t sw = 0x77;
   uint16_t lmin = LIMIT_MIN;
@@ -158,7 +183,10 @@ inline size_t head_41(uint8_t *h) {
     sw = 0x55;
     lmin = 0;
   }
-  const uint8_t data[] = {0x41, 0x10, led, 0x00, 0x00, 0x94, (uint8_t) lmin, (uint8_t) (lmin >> 8),
+  const uint8_t b4 = g_test_b4.load() >= 0 ? (uint8_t) g_test_b4.load() : warn;
+  // 0x94 wie im Mitschnitt. Bit 0 oder 1 gesetzt: Anzeige wechselt zwischen 0.0 und AC2 bzw. AC3 (Eingangswahl).
+  const uint8_t b5 = g_test_b5.load() >= 0 ? (uint8_t) g_test_b5.load() : 0x94;
+  const uint8_t data[] = {0x41, 0x10, led, blink, b4, b5, (uint8_t) lmin, (uint8_t) (lmin >> 8),
                           (uint8_t) LIMIT_MAX, (uint8_t) (LIMIT_MAX >> 8), (uint8_t) limit, (uint8_t) (limit >> 8),
                           sw};
   size_t n = 0;
@@ -311,6 +339,19 @@ inline void on_command(const char *text) {
       const char hex[3] = {p[1], p[2], 0};
       g_drop[strtoul(hex, nullptr, 16) & 0xFF] = (c == 'D');
       p += 2;
+    } else if (c == 'W') {
+      char hex[9] = {0};
+      int k = 0;
+      while (k < 8 && isxdigit((unsigned char) p[1 + k])) {
+        hex[k] = p[1 + k];
+        k++;
+      }
+      auto byte_at = [&](int i) { char h[3] = {hex[i], hex[i + 1], 0}; return (int) strtol(h, nullptr, 16); };
+      g_test_led = k >= 4 ? byte_at(0) : -1;
+      g_test_blink = k >= 4 ? byte_at(2) : 0;
+      g_test_b4 = k >= 6 ? byte_at(4) : -1;
+      g_test_b5 = k >= 8 ? byte_at(6) : -1;
+      p += k;
     } else if (c == 'B') {
       const int baud = (int) strtol(p + 1, nullptr, 10);
       if (baud >= 200000 && baud <= 300000) {
@@ -590,12 +631,17 @@ inline void gx_task(void *) {
     }
 
     if (ok && now >= next_poll) {
-      uint16_t l = 0, st = 0, m = 0;
-      ok = transact(s, 3, REG_LIMIT, &l) && transact(s, 3, REG_STATE, &st) && transact(s, 3, REG_MODE, &m);
+      uint16_t l = 0, st = 0, m = 0, at = 0, ab = 0, ao = 0;
+      ok = transact(s, 3, REG_LIMIT, &l) && transact(s, 3, REG_STATE, &st) && transact(s, 3, REG_MODE, &m) &&
+           transact(s, 3, REG_ALARM_TEMP, &at) && transact(s, 3, REG_ALARM_LOWBAT, &ab) &&
+           transact(s, 3, REG_ALARM_OVERLOAD, &ao);
       if (ok) {
         g_gx_limit = l;
         g_gx_state = st;
         g_gx_mode = m;
+        g_gx_alarm_temp = (uint8_t) at;
+        g_gx_alarm_lowbat = (uint8_t) ab;
+        g_gx_alarm_overload = (uint8_t) ao;
         g_gx_ok_us = esp_timer_get_time();
       }
       next_poll = esp_timer_get_time() + POLL_US;
@@ -639,9 +685,11 @@ inline void log_stats() {
            (unsigned) g_busy_timeouts.load(), (unsigned) g_panel_ok.load(),
            (unsigned) g_panel_bad.load(), (unsigned) g_fc0f.load(), (unsigned) g_dmc_pos.load(),
            (unsigned) g_dmc_limit.load());
-  ESP_LOGI(TAG, "GX vor %d s: Mode %u, State %u, Grenze %u, LED %02X | geschrieben %u, fehlgeschlagen %u, GX-Fehler %u",
+  ESP_LOGI(TAG, "GX vor %d s: Mode %u, State %u, Grenze %u, LED %02X, Alarme T/B/U %u/%u/%u | geschrieben %u, "
+           "fehlgeschlagen %u, GX-Fehler %u",
            (int) age, (unsigned) g_gx_mode.load(), (unsigned) g_gx_state.load(), (unsigned) g_gx_limit.load(),
-           leds_from_state(g_gx_state.load()), (unsigned) g_writes_ok.load(), (unsigned) g_writes_failed.load(),
+           leds_from_state(g_gx_state.load()), (unsigned) g_gx_alarm_temp.load(), (unsigned) g_gx_alarm_lowbat.load(),
+           (unsigned) g_gx_alarm_overload.load(), (unsigned) g_writes_ok.load(), (unsigned) g_writes_failed.load(),
            (unsigned) g_gx_errors.load());
 }
 

@@ -271,7 +271,24 @@ Die DMC-Firmware sendet jetzt alle Rahmen mit der Pause nach der Adresse und den
 
 Gesucht wird alles, worin sich der Sync von den Datenrahmen oder vom Signal des ESP unterscheidet: Pausen zwischen den Bytes, ein zweites Stoppbit, zusätzliche Pulse, eine andere Bitdauer. Der ESP sendet 8N1 ohne Pausen mit 3906 ns je Bit. Die Auswertung ist bisher nur mit künstlichen Daten geprüft (`selftest`).
 
-**Noch offen vor dem Einbau:** die LEDs für Überlast, Batterie und Temperatur, die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
+**Warn-LEDs, 08.11.2026.** Die LEDs für Überlast, Batterie und Temperatur liegen beim DMC nicht im LED-Byte, wie es das MK2-Dokument für die Bits 5 bis 7 beschreibt (ausprobiert: LED-Byte `E0` und Blink-Byte `E0` zeigen nichts). Sie stehen im Byte danach, das im Mitschnitt immer `00` war. Rahmen `41 10 LED Blink Warn Eingang ...`. Am DMC Bit für Bit ausprobiert (Testbefehl `Wxxyyzzww` setzt LED, Blink, Warn und Eingang fest, `W` hebt ihn auf):
+
+| Warn-Byte | DMC |
+|---|---|
+| `01` | Temperature blinkt |
+| `02` | Low battery blinkt |
+| `04` | Overload blinkt |
+| `08` | Overload und Low battery blinken zusammen (bei Victron das Zeichen für Ripple) |
+| `11` | Temperature leuchtet |
+| `22` | Low battery leuchtet |
+| `40` | Overload leuchtet |
+| `10`, `20`, `80` allein | nichts |
+
+Die Firmware liest dazu am GX die Register 34 (Temperatur), 35 (Batterie niedrig) und 36 (Überlast): 1 = Warnung blinkt, 2 = Alarm leuchtet. Ripple ist nicht angebunden, das passende Register ist nicht geprüft. Mit einem echten Alarm ist das noch nicht getestet, nur mit dem Testbefehl.
+
+Das Byte danach (`94` im Mitschnitt) wählt den angezeigten AC-Eingang: Bit 0 gesetzt lässt die Anzeige zwischen 0.0 und `AC2` wechseln, Bit 1 zwischen 0.0 und `AC3`. Bit 3 und 5 zeigen nichts.
+
+**Noch offen vor dem Einbau:** die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
 1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.
