@@ -63,7 +63,15 @@ inline TaskHandle_t g_tx_handle = nullptr;
 inline std::atomic<uint16_t> g_gx_limit{0}, g_gx_state{0}, g_gx_mode{0};
 inline std::atomic<uint8_t> g_gx_alarm_temp{0}, g_gx_alarm_lowbat{0}, g_gx_alarm_overload{0};
 // Test der Warn-LEDs ohne echten Alarm: Befehl Wxxyy setzt LED-Byte xx und Blink-Byte yy fest, W allein hebt es auf
-inline std::atomic<int> g_test_led{-1}, g_test_blink{0}, g_test_b4{-1}, g_test_b5{-1};  // Wxxyy[zz[ww]]: auch Byte 4 und 5
+inline std::atomic<int> g_test_led{-1}, g_test_blink{0}, g_test_b4{-1}, g_test_b5{-1};
+// Test der Stromwerte im LED-Rahmen in 0,1 A: X<n> Minimum, Y<n> Maximum, Z<n> Grenze; Buchstabe allein hebt auf
+inline std::atomic<int> g_test_imin{-1}, g_test_imax{-1}, g_test_ilim{-1};
+// Anzeige nachfuehren: Das DMC begrenzt den Knopfwert auf Minimum und Maximum aus dem Rahmen 41 und behaelt den
+// begrenzten Wert, bis der Knopf bewegt wird (ausprobiert 08.11.2026). Kommt eine neue Grenze vom GX, setzt die
+// Firmware beide kurz auf diesen Wert. Danach zeigt das DMC ihn an, bis jemand am Knopf dreht.
+static constexpr int64_t FORCE_US = 3000 * 1000;
+inline std::atomic<int> g_force_limit{-1};
+inline std::atomic<uint32_t> g_forced{0};  // Wxxyy[zz[ww]]: auch Byte 4 und 5
 inline std::atomic<int64_t> g_gx_ok_us{0};
 // Vom DMC, gesetzt in der Empfangstask
 inline std::atomic<uint8_t> g_dmc_pos{0};
@@ -186,8 +194,13 @@ inline size_t head_41(uint8_t *h) {
   const uint8_t b4 = g_test_b4.load() >= 0 ? (uint8_t) g_test_b4.load() : warn;
   // 0x94 wie im Mitschnitt. Bit 0 oder 1 gesetzt: Anzeige wechselt zwischen 0.0 und AC2 bzw. AC3 (Eingangswahl).
   const uint8_t b5 = g_test_b5.load() >= 0 ? (uint8_t) g_test_b5.load() : 0x94;
+  uint16_t lmax = LIMIT_MAX;
+  if (fresh && g_force_limit.load() >= 0) lmin = lmax = (uint16_t) g_force_limit.load();
+  if (g_test_imin.load() >= 0) lmin = (uint16_t) g_test_imin.load();
+  if (g_test_imax.load() >= 0) lmax = (uint16_t) g_test_imax.load();
+  const uint16_t lval = g_test_ilim.load() >= 0 ? (uint16_t) g_test_ilim.load() : limit;
   const uint8_t data[] = {0x41, 0x10, led, blink, b4, b5, (uint8_t) lmin, (uint8_t) (lmin >> 8),
-                          (uint8_t) LIMIT_MAX, (uint8_t) (LIMIT_MAX >> 8), (uint8_t) limit, (uint8_t) (limit >> 8),
+                          (uint8_t) lmax, (uint8_t) (lmax >> 8), (uint8_t) lval, (uint8_t) (lval >> 8),
                           sw};
   size_t n = 0;
   h[n++] = 0x83;
@@ -352,6 +365,14 @@ inline void on_command(const char *text) {
       g_test_b4 = k >= 6 ? byte_at(4) : -1;
       g_test_b5 = k >= 8 ? byte_at(6) : -1;
       p += k;
+    } else if (c == 'X' || c == 'Y' || c == 'Z') {
+      std::atomic<int> &t = c == 'X' ? g_test_imin : (c == 'Y' ? g_test_imax : g_test_ilim);
+      if (p[1] >= '0' && p[1] <= '9') {
+        t = (int) strtol(p + 1, nullptr, 10);
+        while (p[1] >= '0' && p[1] <= '9') p++;
+      } else {
+        t = -1;
+      }
     } else if (c == 'B') {
       const int baud = (int) strtol(p + 1, nullptr, 10);
       if (baud >= 200000 && baud <= 300000) {
@@ -546,6 +567,21 @@ inline void gx_task(void *) {
   uint8_t base_pos = 0, seen_pos = 0;
   uint16_t base_limit = 0, seen_limit = 0;
   int64_t pos_since = 0, limit_since = 0, next_poll = 0;
+  int64_t force_until = 0;
+  int last_gx_limit = -1;  // zuletzt gelesene Grenze vom GX, -1 = noch keine
+  bool sync_display = false;  // nach dem Start des DMC einmal auf den GX-Wert bringen
+
+  // Anzeige des DMC auf den GX-Wert bringen, ohne dass daraus ein Schreibbefehl wird.
+  auto force_display = [&](uint16_t v, int64_t now) {
+    if (v < LIMIT_MIN) v = LIMIT_MIN;
+    if (v > LIMIT_MAX) v = LIMIT_MAX;
+    if (v == seen_limit) return;
+    base_limit = v;  // das DMC meldet gleich diesen Wert, das ist keine Aenderung am Knopf
+    g_force_limit = v;
+    force_until = now + FORCE_US;
+    g_forced++;
+    ESP_LOGI(TAG, "Anzeige des DMC auf %u (0,1 A) wie am GX", v);
+  };
 
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(100));
@@ -565,6 +601,7 @@ inline void gx_task(void *) {
         base_limit = seen_limit = lim;
         pos_since = limit_since = now;
         ESP_LOGI(TAG, "DMC da: Schalterstellung %u, Grenze %u (0,1 A), Ausgangswert ohne Schreiben", pos, lim);
+        sync_display = true;
       }
       if (pos != seen_pos) {
         seen_pos = pos;
@@ -579,7 +616,15 @@ inline void gx_task(void *) {
         static const uint16_t MODE_FOR_POS[4] = {1, 2, 3, 4};  // Ladegeraet, Wechselrichter, Ein, Aus
         plan_write(mode, REG_MODE, MODE_FOR_POS[base_pos & 3]);
       }
-      if (seen_limit != base_limit && now - limit_since >= LIMIT_STABLE_US) {
+      if (force_until != 0 && now >= force_until) {
+        force_until = 0;
+        g_force_limit = -1;
+      }
+      if (sync_display && last_gx_limit >= 0 && !limit.active) {
+        sync_display = false;
+        force_display((uint16_t) last_gx_limit, now);
+      }
+      if (force_until == 0 && seen_limit != base_limit && now - limit_since >= LIMIT_STABLE_US) {
         base_limit = seen_limit;
         uint16_t v = base_limit;
         if (v < LIMIT_MIN) v = LIMIT_MIN;
@@ -636,6 +681,11 @@ inline void gx_task(void *) {
            transact(s, 3, REG_ALARM_TEMP, &at) && transact(s, 3, REG_ALARM_LOWBAT, &ab) &&
            transact(s, 3, REG_ALARM_OVERLOAD, &ao);
       if (ok) {
+        // Neue Grenze vom GX, nicht von uns geschrieben: Anzeige des DMC nachfuehren
+        if (baseline && last_gx_limit >= 0 && l != (uint16_t) last_gx_limit && !limit.active && l != seen_limit) {
+          force_display(l, esp_timer_get_time());
+        }
+        last_gx_limit = l;
         g_gx_limit = l;
         g_gx_state = st;
         g_gx_mode = m;

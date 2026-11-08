@@ -288,7 +288,13 @@ Die Firmware liest dazu am GX die Register 34 (Temperatur), 35 (Batterie niedrig
 
 Das Byte danach (`94` im Mitschnitt) wählt den angezeigten AC-Eingang: Bit 0 gesetzt lässt die Anzeige zwischen 0.0 und `AC2` wechseln, Bit 1 zwischen 0.0 und `AC3`. Bit 3 und 5 zeigen nichts.
 
-**Noch offen vor dem Einbau:** die Ampere-Anzeige folgt nur dem Knopf, die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
+**Ampere-Anzeige, 08.11.2026.** Die Anzeige zeigt den Wert des Knopfs, die Grenze im Rahmen `41` (Bytes 10–11) ändert sie nicht (Test 12,3 A bei Knopf 5,5 A). Das DMC begrenzt den Knopfwert aber auf Minimum und Maximum aus dem Rahmen (Bytes 6–9), meldet den begrenzten Wert auch im Rahmen `40` und **behält ihn, bis der Knopf bewegt wird**, auch wenn die Grenzen wieder frei sind (Test Maximum 4,0 A bei Knopf 5,5 A).
+
+Die Firmware nutzt das: Kommt eine neue Grenze vom GX, die nicht vom DMC stammt, setzt sie Minimum und Maximum für 3 s auf diesen Wert (begrenzt auf 3,1–16,0 A). Danach zeigt das DMC den GX-Wert, bis jemand am Knopf dreht, dann gilt wieder der Knopf. Während dieser 3 s schreibt der ESP nichts an den GX. Nach dem Start des DMC bringt sie die Anzeige einmal auf den GX-Wert. Getestet von Rudi: GX auf 8 A und 4 A, Anzeige folgt; danach Knopf, GX übernimmt.
+
+Vorsicht beim Testbefehl `Y<n>`/`X<n>`: Das DMC meldet den begrenzten Wert, und der ESP schreibt ihn an den GX (so am 08.11.2026 einmal 4,0 A geschrieben, mit dem Knopf zurückgestellt).
+
+**Noch offen vor dem Einbau:** die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**
 1. Flashen mit `write_enable: "false"`, Labornetzteil an, DMC auf Ein.
