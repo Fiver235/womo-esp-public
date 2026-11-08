@@ -306,6 +306,21 @@ Am DMC liegt Aus in der Mitte des Schalters. Von Ein nach Ladegerät geht es üb
 
 **Versorgung für den Einbau, Entscheidung Rudi 08.11.2026: alles aus dem Bordnetz.** V+ am VE.Bus scheidet aus, weil es bei Aus auf 2,2 V fällt und der ESP dann das Einschalten am DMC nicht mehr mitbekäme. Geplant: 12 V → Step-down 5 V → ESP; 12 V → Step-down 8,5 V mit EN-Eingang → DMC Pin 2, EN vom ESP geschaltet; gemeinsame Masse Bordnetz, ESP, DMC Pin 3. Das DMC hängt nicht mehr am MultiPlus. Bei Aus schaltet der ESP das DMC ab und erkennt das Einschalten über Pin 6 des DMC (Standby), vorausgesetzt der Schalter legt Pin 6 auch stromlos auf Masse. Das ist noch zu messen (Durchgang Pin 6 gegen Pin 3 in allen drei Stellungen).
 
+**Pin 6 des DMC, stromlos gemessen 08.11.2026** (Diodentest, Rudi):
+
+| Messung | Aus | Ein | Ladegerät |
+|---|---|---|---|
+| schwarz auf 6, rot auf 3 oder 7 | 0,715 V | 0,715 V | 0,715 V |
+| rot auf 6, schwarz auf 3 oder 7 | OL | 1,055 V | 1,051 V |
+| rot auf 6, schwarz auf 2 | OL | 1,561 V | 1,566 V |
+| Pin 6 gegen 1, 4, 5, 8 | OL | OL | OL |
+
+Der Schalter verbindet Pin 6 bei Ein und Ladegerät auch ohne Versorgung über eine Halbleiterstrecke (etwa 1 V) mit Masse. Bei Aus ist Pin 6 offen. Die 0,715 V in Gegenrichtung sind vermutlich die Body-Diode eines Transistors, mit dem das DMC Pin 6 im Betrieb aktiv auf Masse zieht. Der ESP könnte die Stellung damit bei stromlosem DMC lesen: Widerstand von 3,3 V an Pin 6, Analogeingang, Schwelle etwa 2 V. Noch nicht gemessen.
+
+**DMC bei Schalter Aus neu versorgt, Bus läuft, MultiPlus per VRM ein (08.11.2026 14:52):** LEDs zeigen den Zustand (Mains On, Absorption), die Anzeige bleibt dunkel. Das DMC meldet sich mit Schalter Aus, der ESP nimmt das als Ausgangswert und schreibt nichts, der MultiPlus bleibt an. Damit taugt die Variante „DMC bei Aus stromlos“: Schaltet jemand über VRM ein, versorgt der ESP das DMC wieder, und die LEDs zeigen den Zustand.
+
+**Fehler in der Wiederholung der Schaltbefehle, behoben 08.11.2026:** 0,3 s nach dem Befehl Aus meldete der GX noch Ein, und die Firmware schrieb Aus ein zweites Mal (14:51:32, harmlos). Ein Zurückspringen zählt jetzt erst, wenn der GX den neuen Wert vorher gezeigt hat.
+
 **Noch offen vor dem Einbau:** die dauerhafte Versorgung von ESP und DMC sowie die eigene Leitung zum DMC.
 
 **Test:**

@@ -569,13 +569,16 @@ inline void gx_task(void *) {
   int64_t pos_since = 0, limit_since = 0, next_poll = 0;
   int64_t force_until = 0;
   // Nachpruefen der Schaltbefehle: Nach laengerem Aus setzte der GX Mode 3 nach rund 10 s selbst wieder auf 4
-  // (08.11.2026, zweimal nachgestellt; Einschalten per VRM klappte). Springt der GX innerhalb von VERIFY_US auf den
-  // Wert vor dem Befehl zurueck und steht der Schalter am DMC unveraendert, schreibt die Firmware erneut.
+  // (08.11.2026, zweimal nachgestellt; Einschalten per VRM klappte). Zeigte der GX den neuen Wert schon einmal und
+  // springt er innerhalb von VERIFY_US auf den Wert vor dem Befehl zurueck, waehrend der Schalter am DMC unveraendert
+  // steht, schreibt die Firmware erneut. Ohne "schon einmal gezeigt" schrieb sie 0,3 s nach dem Befehl ein zweites
+  // Mal, weil der GX den alten Wert noch meldete (08.11.2026 14:51:32).
   static constexpr int64_t VERIFY_US = 30 * 1000 * 1000;
   static constexpr int VERIFY_MAX = 5;
   uint16_t verify_value = 0, verify_prev = 0;
   int64_t verify_until = 0;
   int verify_tries = 0;
+  bool verify_seen = false;  // der GX hat den neuen Wert schon einmal gezeigt; erst danach zaehlt ein Zuruecksetzen
   // Stromgrenze bei Aus: Der GX bestaetigt das Schreiben, behaelt den Wert aber nicht (08.11.2026, Knopf bei Aus auf
   // 16,0 A, nach dem Einschalten stand der GX weiter auf 9,0 A). Die Firmware schreibt ihn nach dem Einschalten erneut.
   bool limit_dirty = false;
@@ -691,6 +694,7 @@ inline void gx_task(void *) {
           if (verify_until == 0) verify_prev = g_gx_mode.load();  // Wert vor dem ersten Befehl
           verify_value = p->value;
           verify_until = now + VERIFY_US;
+          verify_seen = false;
         }
         next_poll = 0;
       } else {
@@ -729,9 +733,10 @@ inline void gx_task(void *) {
         if (verify_until != 0) {
           static const uint16_t MODE_FOR_POS2[4] = {1, 2, 3, 4};
           const int64_t t = esp_timer_get_time();
+          if (m == verify_value) verify_seen = true;
           if (t > verify_until) {
             verify_until = 0;
-          } else if (m == verify_prev && m != verify_value && MODE_FOR_POS2[base_pos & 3] == verify_value &&
+          } else if (verify_seen && m == verify_prev && m != verify_value && MODE_FOR_POS2[base_pos & 3] == verify_value &&
                      !mode.active) {
             if (++verify_tries > VERIFY_MAX) {
               ESP_LOGE(TAG, "GX setzt Mode immer wieder auf %u zurueck, gebe auf", m);
