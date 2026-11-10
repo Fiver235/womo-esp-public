@@ -403,7 +403,7 @@ Firmware (`dmc_power_pin: "25"`, `pwr_task` in `vebus_dmc_bridge.h`):
 - Am echten VE.Bus (Sperre) bleibt das DMC aus.
 - Log: „DMC an/aus, Neustarts n“.
 
-Ergebnis 10.11.2026: Neustart des ESP und Kaltstart mit 12 V aus/an, das DMC läuft beide Male ohne Neustart, 0 UART-Fehler.
+Ergebnis 10.11.2026: Neustart des ESP und Kaltstart mit 12 V aus/an, das DMC läuft beide Male ohne Neustart, 0 UART-Fehler. Bei Schalter Aus sendet das DMC weiter etwa 2 Rahmen `40` pro Sekunde, die Überwachung startet es also nicht unnötig neu (eine Minute beobachtet).
 
 ## Unterschied zum Betrieb
 
