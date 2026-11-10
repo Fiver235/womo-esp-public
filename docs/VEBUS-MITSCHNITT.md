@@ -380,7 +380,30 @@ Lösung B so aufgebaut: Bekommen ESP und DMC gleichzeitig Strom, hängt das DMC.
 | DMC etwa 2 s nach dem ESP eingesteckt, Bus ruhig, ESP sendet erst nach WLAN und 5 s Zuhören | hängt |
 | Bus-Teil vor dem WLAN gestartet (`start_bus`), Zuhören 0,3 s statt 5 s: ESP sendet etwa 1,2 s nach dem Start | hängt |
 
-Folgerung: Das DMC braucht Busverkehr praktisch ab dem Einschalten. Die Firmware-Änderungen bleiben, sie schaden nicht. **Abhilfe:** Der ESP schaltet das 8,5-V-Modul erst ein, wenn er sendet, und kann ein hängendes DMC aus- und wieder einschalten. Die vorhandenen MP1584-Module haben keinen EN-Anschluss (nur IN+, IN−, OUT+, OUT−). Rudi bestellt ein Modul mit EN-Anschluss. Vor dem Anschluss die Spannung an EN gegen GND bei offenem EN messen, davon hängt die Beschaltung ab.
+Folgerung: Das DMC braucht Busverkehr praktisch ab dem Einschalten. Die Firmware-Änderungen bleiben, sie schaden nicht. Die vorhandenen MP1584-Module haben keinen EN-Anschluss (nur IN+, IN−, OUT+, OUT−), deshalb versorgt jetzt ein Mini560 das DMC.
+
+### Lösung: ESP schaltet das DMC ein (Aufbau 10.11.2026)
+
+Das 8,5-V-MP1584 für das DMC ist durch ein **Mini560 mit fest 9 V** ersetzt (Amazon B0CM9SNGKZ, Eingang 11–20 V). Am echten VE.Bus lagen an V+ 9,0 V ohne und 8,35–8,85 V mit DMC, 9 V passen also. Das Mini560 hat einen EN-Anschluss ohne eigenen Pull-up.
+
+```text
+Mini560 9 V   IN+  ◄── 12 V (hinter der Sicherung)
+              GND  ──── gemeinsame Masse
+              OUT+ ───► DMC Pin 2
+              EN   ◄─────────┬──── GPIO25 ESP
+                           10 kΩ
+                             └──── GND
+```
+
+Firmware (`dmc_power_pin: "25"`, `pwr_task` in `vebus_dmc_bridge.h`):
+
+- GPIO25 bleibt Low, bis der ESP sendet. Der 10 kΩ hält das DMC auch beim Booten und bei abgestürztem ESP aus.
+- 0,5 s nach dem ersten Senden GPIO25 High: Das DMC startet mit laufendem Bus.
+- Kein Rahmen `40` innerhalb von 10 s nach dem Einschalten oder 10 s lang keiner mehr: DMC 2 s aus, wieder an. Nach drei vergeblichen Versuchen in Folge nur noch einmal pro Minute. Befehl `P` über den Mitschnitt-Client startet das DMC ebenfalls neu.
+- Am echten VE.Bus (Sperre) bleibt das DMC aus.
+- Log: „DMC an/aus, Neustarts n“.
+
+Ergebnis 10.11.2026: Neustart des ESP und Kaltstart mit 12 V aus/an, das DMC läuft beide Male ohne Neustart, 0 UART-Fehler.
 
 ## Unterschied zum Betrieb
 

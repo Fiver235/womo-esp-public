@@ -15,6 +15,7 @@ substitutions:
   friendly_name: "VE.Bus Sniffer"
   rx_pin: "16"              # GPIO16 <- RXD ueber Teiler 1k/2k
   tx_pin: "17"              # GPIO17 -> TXD ueber 1N4148, GPIO17 mit 10k an GND
+  dmc_power_pin: "25"       # GPIO25 -> EN des Mini560 (9 V fuer DMC Pin 2), 10k an GND; -1 = DMC fest versorgt
   gx_ip: "192.168.1.242"    # GX im Womo-WLAN, wie im BLE-Proxy
   vebus_unit_id: "246"
   write_enable: "true"      # freigegeben von Rudi am 05.11.2026 fuer den Schalttest
@@ -40,7 +41,7 @@ esphome:
         # startet der Bus-Teil hier, vor dem WLAN, und sendet nach 0,3 s Zuhoeren. start_bus haelt GPIO17 bis
         # dahin auf High, sonst schaltet der 10k nach GND den Sender des Wandlers ein.
         - lambda: |-
-            vebus_dmc_bridge::start_bus(${rx_pin}, ${tx_pin}, ${live_time}, ${fc_reply}, ${baud});
+            vebus_dmc_bridge::start_bus(${rx_pin}, ${tx_pin}, ${dmc_power_pin}, ${live_time}, ${fc_reply}, ${baud});
     - priority: -100        # nach dem Netzwerk-Stack
       then:
       - lambda: |-

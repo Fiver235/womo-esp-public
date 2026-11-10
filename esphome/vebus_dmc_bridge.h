@@ -343,10 +343,67 @@ inline size_t head_e4_live(const uint8_t *rec, size_t len, int64_t next_sync_us,
   return n;
 }
 
+// Versorgung des DMC: Mini560 (9 V) mit EN an g_pwr_pin, 10 kOhm nach GND. Das DMC haengt sich auf, wenn es
+// ohne Busverkehr startet (08.11.2026). Deshalb erst senden, dann einschalten, und bei Schweigen neu starten.
+static constexpr int64_t PWR_ON_DELAY_US = 500000;           // nach dem ersten Senden
+static constexpr int64_t PWR_FIRST_FRAME_US = 10 * 1000000;  // Zeit bis zum ersten Rahmen 40 nach dem Einschalten
+static constexpr int64_t PWR_LOST_US = 10 * 1000000;         // so lange ohne Rahmen 40 gilt das DMC als haengend
+static constexpr int64_t PWR_OFF_US = 2 * 1000000;           // Pause beim Neustart
+static constexpr int64_t PWR_BACKOFF_US = 60 * 1000000;      // nach 3 vergeblichen Neustarts in Folge
+inline int g_pwr_pin = -1;
+inline std::atomic<uint32_t> g_dmc_restarts{0};
+inline std::atomic<bool> g_pwr_on{false}, g_pwr_restart_req{false};
+
+inline void pwr_set(bool on) {
+  if (g_pwr_pin < 0) return;
+  gpio_set_level((gpio_num_t) g_pwr_pin, on ? 1 : 0);
+  g_pwr_on = on;
+}
+
+inline void pwr_task(void *) {
+  while (!g_sending.load()) {
+    if (g_blocked.load()) {  // am echten VE.Bus: DMC bleibt aus
+      vTaskDelete(nullptr);
+      return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+  vTaskDelay(pdMS_TO_TICKS(PWR_ON_DELAY_US / 1000));
+  pwr_set(true);
+  ESP_LOGW(TAG, "DMC eingeschaltet (GPIO%d)", g_pwr_pin);
+  int64_t on_since = esp_timer_get_time();
+  int fails = 0;
+  for (;;) {
+    vTaskDelay(pdMS_TO_TICKS(200));
+    const int64_t now = esp_timer_get_time();
+    const int64_t last = g_dmc_us.load();
+    const bool seen = last > on_since;  // Rahmen 40 seit dem letzten Einschalten
+    if (seen) fails = 0;
+    const char *why = nullptr;
+    if (g_pwr_restart_req.exchange(false)) {
+      why = "Befehl";
+    } else if (!seen && now - on_since > (fails >= 3 ? PWR_BACKOFF_US : PWR_FIRST_FRAME_US)) {
+      why = "kein Rahmen 40 nach dem Einschalten";
+    } else if (seen && now - last > PWR_LOST_US) {
+      why = "keine Rahmen 40 mehr";
+    }
+    if (why == nullptr) continue;
+    if (!seen) fails++;
+    g_dmc_restarts++;
+    ESP_LOGW(TAG, "DMC neu starten: %s (Fehlversuche in Folge %d)", why, fails);
+    pwr_set(false);
+    vTaskDelay(pdMS_TO_TICKS(PWR_OFF_US / 1000));
+    pwr_set(true);
+    on_since = esp_timer_get_time();
+  }
+}
+
 inline void on_command(const char *text) {
   for (const char *p = text; *p != 0; p++) {
     const char c = *p;
-    if ((c == 'L' || c == 'R') && p[1] >= '0' && p[1] <= '9') {
+    if (c == 'P') {
+      g_pwr_restart_req = true;  // DMC aus- und wieder einschalten
+    } else if ((c == 'L' || c == 'R') && p[1] >= '0' && p[1] <= '9') {
       (c == 'L' ? g_live_time : g_fc_reply) = p[1] - '0';
       p++;
     } else if ((c == 'D' || c == 'U') && p[1] != 0 && p[2] != 0) {
@@ -775,7 +832,12 @@ inline void gx_task(void *) {
 
 // Bus-Teil: so frueh wie moeglich, vor dem WLAN. Das DMC haengt sich auf, wenn nach seinem Einschalten einige
 // Sekunden nichts auf dem Bus kommt (Einbau Loesung B, 08.11.2026).
-inline void start_bus(int rx_pin, int tx_pin, bool live_time, int fc_reply, int baud) {
+inline void start_bus(int rx_pin, int tx_pin, int pwr_pin, bool live_time, int fc_reply, int baud) {
+  g_pwr_pin = pwr_pin;
+  if (pwr_pin >= 0) {
+    gpio_set_direction((gpio_num_t) pwr_pin, GPIO_MODE_OUTPUT);
+    pwr_set(false);  // DMC aus, bis der ESP sendet
+  }
   vebus_sniffer::g_baud = baud;
   g_live_time = live_time;
   g_fc_reply = fc_reply;
@@ -786,6 +848,7 @@ inline void start_bus(int rx_pin, int tx_pin, bool live_time, int fc_reply, int 
   vebus_sniffer::g_on_command = on_command;
   vebus_sniffer::start_rx(rx_pin);
   xTaskCreatePinnedToCore(tx_task, "vebus_tx", 4096, nullptr, configMAX_PRIORITIES - 3, nullptr, 1);
+  if (pwr_pin >= 0) xTaskCreatePinnedToCore(pwr_task, "vebus_pwr", 3072, nullptr, 3, nullptr, 0);
 }
 
 // Netzwerk-Teil: GX und Mitschnitt-Server, nach dem Netzwerk-Stack
@@ -802,11 +865,12 @@ inline void start_net(const char *gx_ip, uint8_t unit, bool write_enable) {
 inline void log_stats() {
   vebus_sniffer::log_stats();
   const int64_t age = g_gx_ok_us.load() == 0 ? -1 : (esp_timer_get_time() - g_gx_ok_us.load()) / 1000000;
-  ESP_LOGI(TAG, "%s, gesendet %u, Schleifen %u, 0x38 %u, gewartet %u/%u | DMC 0x40 ok %u, schlecht %u, FC0F %u, "
-           "Schalter %u, Grenze %u",
+  ESP_LOGI(TAG, "%s, gesendet %u, Schleifen %u, 0x38 %u, gewartet %u/%u | DMC %s, Neustarts %u, 0x40 ok %u, "
+           "schlecht %u, FC0F %u, Schalter %u, Grenze %u",
            g_blocked.load() ? "GESPERRT" : (g_sending.load() ? "sendet" : "hoert zu"), (unsigned) g_sent.load(),
            (unsigned) g_loops.load(), (unsigned) g_sent38.load(), (unsigned) g_busy_waits.load(),
-           (unsigned) g_busy_timeouts.load(), (unsigned) g_panel_ok.load(),
+           (unsigned) g_busy_timeouts.load(), g_pwr_pin < 0 ? "Strom fest" : (g_pwr_on.load() ? "an" : "aus"),
+           (unsigned) g_dmc_restarts.load(), (unsigned) g_panel_ok.load(),
            (unsigned) g_panel_bad.load(), (unsigned) g_fc0f.load(), (unsigned) g_dmc_pos.load(),
            (unsigned) g_dmc_limit.load());
   ESP_LOGI(TAG, "GX vor %d s: Mode %u, State %u, Grenze %u, LED %02X, Alarme T/B/U %u/%u/%u | geschrieben %u, "
